@@ -1,0 +1,75 @@
+{
+	"name": "DevHabit ASP.NET Core",
+	"dockerComposeFile": "../docker-compose.yml",
+	"service": "devhabit.api",
+	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+
+	// Configure tool-specific properties.
+	"customizations": {
+		// Configure properties specific to VS Code.
+		"vscode": {
+			// Add the IDs of extensions you want installed when the container is created.
+			"extensions": [
+				"ms-dotnettools.csharp",
+				"ms-dotnettools.csdevkit",
+				"ms-dotnettools.vscode-dotnet-runtime",
+				"ms-vscode.vscode-json",
+				"ms-vscode.docker",
+				"formulahendry.dotnet-test-explorer",
+				"bradlc.vscode-tailwindcss",
+				"esbenp.prettier-vscode"
+			],
+			"settings": {
+				"dotnet.server.useOmnisharp": false,
+				"dotnet.completion.showCompletionItemsFromUnimportedNamespaces": true,
+				"dotnet.inlayHints.enableInlayHintsForParameters": true,
+				"dotnet.inlayHints.enableInlayHintsForLiteralParameters": true,
+				"dotnet.inlayHints.enableInlayHintsForIndexerParameters": true,
+				"dotnet.inlayHints.enableInlayHintsForObjectCreationParameters": true,
+				"dotnet.inlayHints.enableInlayHintsForOtherParameters": true,
+				"dotnet.inlayHints.suppressInlayHintsForParametersThatDifferOnlyBySuffix": true,
+				"dotnet.inlayHints.suppressInlayHintsForParametersThatMatchMethodIntent": true,
+				"dotnet.inlayHints.suppressInlayHintsForParametersThatMatchArgumentName": true
+			}
+		}
+	},
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	"features": {
+		"ghcr.io/devcontainers/features/git:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
+	},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	"forwardPorts": [8080, 8081, 5432, 18888],
+	"portsAttributes": {
+		"8080": {
+			"label": "DevHabit API (HTTP)",
+			"onAutoForward": "notify"
+		},
+		"8081": {
+			"label": "DevHabit API (HTTPS)",
+			"onAutoForward": "notify"
+		},
+		"5432": {
+			"label": "PostgreSQL",
+			"onAutoForward": "silent"
+		},
+		"18888": {
+			"label": "Aspire Dashboard",
+			"onAutoForward": "notify"
+		}
+	},
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	"postCreateCommand": "dotnet restore",
+
+	// Configure mount points
+	"mounts": [
+		"source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached"
+	],
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	"remoteUser": "root"
+}
