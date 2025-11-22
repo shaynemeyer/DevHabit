@@ -5,55 +5,118 @@ A modern ASP.NET Core Web API built with .NET 9.0, designed with strict code qua
 ## Features
 
 - **ASP.NET Core Web API** with .NET 9.0
+- **Docker Container Support** with multi-service orchestration
+- **HTTPS Support** with self-signed development certificates
+- **PostgreSQL Database** integration with Entity Framework Core
 - **OpenAPI/Swagger** documentation
 - **Strict Code Analysis** with SonarAnalyzer
 - **Central Package Management** for consistent dependency versions
 - **Nullable Reference Types** enabled
 - **Warnings as Errors** for high code quality
+- **.NET Aspire Dashboard** for telemetry and monitoring
 
 ## Prerequisites
 
+### For Docker Development (Recommended)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine
+- [Docker Compose](https://docs.docker.com/compose/) (included with Docker Desktop)
+
+### For Local Development
 - [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- [PostgreSQL](https://www.postgresql.org/download/) (or use Docker for database only)
 - IDE of your choice (Visual Studio, VS Code, Rider)
 
 ## Getting Started
 
-### 1. Clone the Repository
+### Option 1: Docker Development (Recommended)
+
+#### 1. Clone the Repository
 ```bash
 git clone <repository-url>
 cd DevHabit
 ```
 
-### 2. Restore Dependencies
+#### 2. Generate HTTPS Certificates (First Time Only)
 ```bash
+./generate-dev-cert.sh
+```
+
+#### 3. Start All Services
+```bash
+docker-compose up --build
+```
+
+The API will be available at:
+- **HTTPS**: `https://localhost:9001/habits` (secure, recommended)
+- **HTTP**: `http://localhost:9000/habits` (redirects to HTTPS)
+- **Aspire Dashboard**: `http://localhost:18888` (monitoring)
+- **PostgreSQL**: `localhost:5492` (user: postgres, password: postgres)
+
+#### 4. Test the API
+```bash
+curl -k https://localhost:9001/habits
+```
+
+### Option 2: Local Development
+
+#### 1. Clone and Setup
+```bash
+git clone <repository-url>
+cd DevHabit
 dotnet restore
 ```
 
-### 3. Build the Project
+#### 2. Configure Database
+Setup PostgreSQL locally or use Docker for database only:
 ```bash
-dotnet build
+docker run --name devhabit-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:17.2
 ```
 
-### 4. Run the Application
+#### 3. Run the Application
 ```bash
 dotnet run --project DevHabit.Api
 ```
 
 The API will be available at:
-- HTTPS: `https://localhost:5001`
-- HTTP: `http://localhost:5000`
+- **HTTPS**: `https://localhost:5001/habits`
+- **HTTP**: `http://localhost:5000/habits`
 
 ## Development
 
-### Running with Hot Reload
-For development with automatic restart on file changes:
+### Docker Development Commands
+```bash
+# Start all services
+docker-compose up
+
+# Rebuild and start (after code changes)
+docker-compose up --build
+
+# Run in background
+docker-compose up -d
+
+# View logs
+docker-compose logs -f devhabit.api
+
+# Stop all services
+docker-compose down
+
+# Generate HTTPS certificates (first time)
+./generate-dev-cert.sh
+```
+
+### Local Development with Hot Reload
+For local development with automatic restart on file changes:
 ```bash
 dotnet watch --project DevHabit.Api
 ```
 
 ### API Documentation
-When running in development mode, OpenAPI documentation is available at:
-- Swagger UI: `https://localhost:5001/swagger` (if Swagger UI is configured)
+OpenAPI documentation is available at:
+
+**Docker Environment:**
+- OpenAPI JSON: `https://localhost:9001/openapi/v1.json`
+
+**Local Environment:**
 - OpenAPI JSON: `https://localhost:5001/openapi/v1.json`
 
 ### Code Quality
@@ -86,24 +149,45 @@ The project uses [Central Package Management](https://learn.microsoft.com/en-us/
 
 ```
 DevHabit/
-├── DevHabit.Api/              # Web API project
-│   ├── Controllers/           # API controllers
-│   ├── Properties/            # Launch settings and configuration
-│   ├── appsettings.json       # Application configuration
-│   ├── Program.cs            # Application entry point
-│   └── DevHabit.Api.csproj   # Project file
-├── Directory.Build.props      # Global MSBuild properties
-├── Directory.Packages.props   # Central package version management
-├── DevHabit.sln              # Solution file
-└── README.md                 # This file
+├── DevHabit.Api/                    # Web API project
+│   ├── Controllers/                 # API controllers
+│   │   └── HabitsController.cs     # Habits API endpoints
+│   ├── Database/                   # Database context and configuration
+│   ├── Entities/                   # Entity models
+│   ├── Properties/                 # Launch settings and configuration
+│   ├── appsettings.json            # Base application configuration
+│   ├── appsettings.Development.json # Local development overrides
+│   ├── appsettings.Docker.json     # Docker container configuration
+│   ├── Dockerfile                  # Docker container definition
+│   ├── Program.cs                  # Application entry point
+│   └── DevHabit.Api.csproj        # Project file
+├── .certificates/                   # HTTPS development certificates (gitignored)
+├── Directory.Build.props           # Global MSBuild properties
+├── Directory.Packages.props        # Central package version management
+├── docker-compose.yml              # Multi-service container orchestration
+├── generate-dev-cert.sh           # HTTPS certificate generation script
+├── DevHabit.sln                   # Solution file
+├── CLAUDE.md                      # Claude Code project guidance
+├── HTTPS-SETUP.md                 # HTTPS configuration guide
+└── README.md                      # This file
 ```
 
 ## Available Commands
 
+### Docker Commands
+| Command | Description |
+|---------|-------------|
+| `./generate-dev-cert.sh` | Generate HTTPS development certificates |
+| `docker-compose up` | Start all services |
+| `docker-compose up --build` | Rebuild and start all services |
+| `docker-compose down` | Stop and remove all containers |
+| `docker-compose logs devhabit.api` | View API container logs |
+
+### .NET Commands
 | Command | Description |
 |---------|-------------|
 | `dotnet build` | Build the solution |
-| `dotnet run --project DevHabit.Api` | Run the API |
+| `dotnet run --project DevHabit.Api` | Run the API locally |
 | `dotnet watch --project DevHabit.Api` | Run with hot reload |
 | `dotnet test` | Run tests (when test projects are added) |
 | `dotnet restore` | Restore NuGet packages |
@@ -111,14 +195,27 @@ DevHabit/
 ## Configuration
 
 ### Development Settings
-- `appsettings.Development.json` - Development-specific configuration
+- `appsettings.json` - Base application settings
+- `appsettings.Development.json` - Local development overrides
+- `appsettings.Docker.json` - Docker container configuration (includes HTTPS)
 - `Properties/launchSettings.json` - Development server profiles
+
+### HTTPS Configuration
+The project supports HTTPS in both local and containerized environments:
+- **Container**: Uses self-signed certificates generated by `generate-dev-cert.sh`
+- **Local**: Uses ASP.NET Core development certificates
+- For detailed HTTPS setup and troubleshooting, see [`HTTPS-SETUP.md`](HTTPS-SETUP.md)
 
 ### Environment Variables
 The application uses standard ASP.NET Core configuration patterns. Set environment-specific values using:
 - Environment variables
 - User secrets (for development)
 - Configuration files
+
+### Database Configuration
+- **Docker**: PostgreSQL container with automatic connection setup
+- **Local**: Requires local PostgreSQL installation or Docker container
+- Connection strings configured per environment in respective `appsettings` files
 
 ## Testing
 

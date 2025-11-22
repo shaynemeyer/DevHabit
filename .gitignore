@@ -492,3 +492,9 @@ appsettings.*.json
 
 .containers
 
+# Development certificates
+.certificates/
+*.pfx
+*.crt
+*.key
+

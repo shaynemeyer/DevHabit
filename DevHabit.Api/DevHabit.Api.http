@@ -1,6 +1,48 @@
-@DevHabit.Api_HostAddress = http://localhost:9000
+# DevHabit API HTTP Client Tests
+# Configure base URLs for different environments
 
-GET {{DevHabit.Api_HostAddress}}/weatherforecast/
+# Docker Container (Recommended)
+@DevHabit.Api_HTTP = http://localhost:9000
+@DevHabit.Api_HTTPS = https://localhost:9001
+
+# Local Development
+@DevHabit.Api_Local_HTTP = http://localhost:5000
+@DevHabit.Api_Local_HTTPS = https://localhost:5001
+
+###
+
+# Get all habits (Docker HTTPS - Recommended)
+GET {{DevHabit.Api_HTTPS}}/habits
+Accept: application/json
+
+###
+
+# Get all habits (Docker HTTP - redirects to HTTPS)
+GET {{DevHabit.Api_HTTP}}/habits
+Accept: application/json
+
+###
+
+# Get all habits (Local Development HTTPS)
+GET {{DevHabit.Api_Local_HTTPS}}/habits
+Accept: application/json
+
+###
+
+# Get all habits (Local Development HTTP)
+GET {{DevHabit.Api_Local_HTTP}}/habits
+Accept: application/json
+
+###
+
+# Get OpenAPI specification (Docker)
+GET {{DevHabit.Api_HTTPS}}/openapi/v1.json
+Accept: application/json
+
+###
+
+# Get OpenAPI specification (Local)
+GET {{DevHabit.Api_Local_HTTPS}}/openapi/v1.json
 Accept: application/json
 
 ###
