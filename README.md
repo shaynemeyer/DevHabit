@@ -151,9 +151,14 @@ The project uses [Central Package Management](https://learn.microsoft.com/en-us/
 DevHabit/
 ├── DevHabit.Api/                    # Web API project
 │   ├── Controllers/                 # API controllers
-│   │   └── HabitsController.cs     # Habits API endpoints
+│   │   ├── HabitsController.cs     # Habits API endpoints (GET /habits, GET /habits/{id})
+│   │   └── WeatherForecastController.cs # Example controller (template)
+│   ├── DTOs/                       # Data Transfer Objects
+│   │   └── Habits/                 # Habit-related DTOs
+│   │       └── HabitDto.cs        # Habit response models
 │   ├── Database/                   # Database context and configuration
 │   ├── Entities/                   # Entity models
+│   │   └── Habit.cs               # Main habit entity with enums
 │   ├── Properties/                 # Launch settings and configuration
 │   ├── appsettings.json            # Base application configuration
 │   ├── appsettings.Development.json # Local development overrides
@@ -216,6 +221,66 @@ The application uses standard ASP.NET Core configuration patterns. Set environme
 - **Docker**: PostgreSQL container with automatic connection setup
 - **Local**: Requires local PostgreSQL installation or Docker container
 - Connection strings configured per environment in respective `appsettings` files
+
+## Troubleshooting
+
+### Common Issues
+
+#### API Fails to Start with Database Connection Error
+**Problem**: Getting `Failed to connect to 127.0.0.1:5492` or similar database connection errors.
+
+**Solution**: The API requires PostgreSQL to be running. Choose one of these options:
+
+**Option 1: Start Database Only (Recommended for Local Development)**
+```bash
+# Start PostgreSQL database container
+docker-compose up devhabit.postgres -d
+
+# Then run API locally
+dotnet run --project DevHabit.Api
+```
+
+**Option 2: Use Full Docker Compose**
+```bash
+# Generate certificates first (if not done before)
+./generate-dev-cert.sh
+
+# Start all services
+docker-compose up --build
+```
+
+#### Certificate Generation Script Issues
+**Problem**: `./generate-dev-cert.sh: bad interpreter: /bin/bash^M`
+
+**Solution**: The script has Windows line endings. Convert line endings:
+```bash
+# On macOS/Linux
+sed -i '' 's/\r$//' generate-dev-cert.sh
+chmod +x generate-dev-cert.sh
+./generate-dev-cert.sh
+```
+
+#### Docker Build Fails with NuGet Connectivity
+**Problem**: `NU1900: Error occurred while getting package vulnerability data`
+
+**Solution**: This is a network connectivity issue. Try:
+1. Check your internet connection
+2. Restart Docker Desktop
+3. Use local development instead: `dotnet run --project DevHabit.Api`
+
+### API Endpoints Available
+
+Once the API is running, the following endpoints are available:
+
+**Local Development:**
+- `GET http://localhost:5000/habits` - Get all habits
+- `GET http://localhost:5000/habits/{id}` - Get habit by ID
+
+**Docker Development:**
+- `GET http://localhost:9000/habits` - Get all habits
+- `GET http://localhost:9000/habits/{id}` - Get habit by ID
+
+The API returns seeded habit data for testing purposes.
 
 ## Testing
 

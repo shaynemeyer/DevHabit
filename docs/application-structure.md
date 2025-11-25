@@ -48,7 +48,11 @@ DevHabit/
 DevHabit.Api/
 ├── Program.cs                      # Application entry point & service configuration
 ├── Controllers/                    # API controllers
+│   ├── HabitsController.cs        # Habits API endpoints (GET /habits, GET /habits/{id})
 │   └── WeatherForecastController.cs  # Example controller (template)
+├── DTOs/                          # Data Transfer Objects
+│   └── Habits/                    # Habit-related DTOs
+│       └── HabitDto.cs           # Habit response models (HabitDto, FrequencyDto, etc.)
 ├── Entities/                       # Domain models
 │   └── Habit.cs                   # Main habit entity with enums
 ├── Database/                       # Data access layer
@@ -115,6 +119,42 @@ Via `docker-compose.yml`:
 - **Custom migration history table** with application schema
 - **Automatic migrations** applied in development mode
 
+## **Current API Endpoints**
+
+The **HabitsController** provides the following endpoints:
+
+### **GET /habits**
+- Returns collection of all habits
+- Response: `HabitsCollectionDto` with array of `HabitDto` objects
+- Includes full habit data with frequency, target, and milestone information
+
+### **GET /habits/{id}**
+- Returns a specific habit by ID
+- Parameter: `string id` - habit identifier
+- Response: `HabitDto` object for found habit, or 404 if not found
+- Supports string-based habit IDs (e.g., "h_01HNK4V8J5T6MW8X9Y0Z1A2B3C")
+
+### **Sample Response Structure**
+```json
+{
+  "id": "h_01HNK4V8J5T6MW8X9Y0Z1A2B3C",
+  "name": "Daily Meditation",
+  "description": "Morning mindfulness practice",
+  "type": 2,
+  "frequency": { "type": 1, "timesPerPeriod": 1 },
+  "target": { "value": 15, "unit": "minutes" },
+  "status": 1,
+  "isArchived": false,
+  "endDate": null,
+  "milestone": null,
+  "createdAtUtc": "2025-02-03T08:00:00Z",
+  "updatedAtUtc": null,
+  "lastCompletedAtUtc": null
+}
+```
+
+The API includes **seeded test data** with 10 sample habits for development and testing purposes.
+
 ## **Key Features**
 
 1. **Modern C# practices** with latest language features
@@ -123,5 +163,7 @@ Via `docker-compose.yml`:
 4. **Strict code quality** enforcement
 5. **Centralized configuration** management
 6. **Rich domain modeling** for habit tracking
+7. **Functional API endpoints** with proper error handling
+8. **DTO pattern implementation** for clean data transfer
 
 The application is well-structured for **scalability**, **maintainability**, and **production deployment** with modern DevOps practices.
