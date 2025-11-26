@@ -52,7 +52,9 @@ The project enforces strict code quality standards:
 - **DTOs/**: Data Transfer Objects organized by feature (e.g., DTOs/Habits/)
   - **HabitDto**: Read model for habit data
   - **CreateHabitDto**: Input model for habit creation
-  - **HabitMappings**: Extension methods for entity-DTO conversions
+  - **UpdateHabitDto**: Input model for full habit updates (PUT operations)
+  - **UpdateMilestoneDto**: Simplified milestone update model (only Target, preserves Current progress)
+  - **HabitMappings**: Extension methods for entity-DTO conversions including UpdateFromDto
   - **HabitQueries**: LINQ expression projections for efficient database queries
 - **Database/**: Entity Framework Core configuration
   - **ApplicationDbContext**: Main database context with Habits DbSet
@@ -71,6 +73,12 @@ The project enforces strict code quality standards:
 
 ### Dependency Injection
 The project uses ASP.NET Core's built-in dependency injection container. Services are configured in Program.cs.
+
+### JSON Patch Support
+The API supports JSON Patch operations for partial updates:
+- **Microsoft.AspNetCore.JsonPatch** (v9.0.11): Provides JSON Patch functionality
+- **Microsoft.AspNetCore.Mvc.NewtonsoftJson** (v9.0.11): Enables Newtonsoft.Json serialization required for JSON Patch
+- **Configuration**: Program.cs includes `.AddNewtonsoftJson()` to enable JSON Patch document support
 
 ### API Documentation
 - OpenAPI/Swagger is configured and available in development mode
@@ -167,8 +175,9 @@ For HTTPS support in containers:
 - **Entity Configuration**: Use `IEntityTypeConfiguration<T>` for Fluent API configurations
 - **Value Objects**: Model complex properties as owned entities (e.g., `Frequency`, `Target`)
 - **DTO Projections**: Use `Expression<Func<T, TResult>>` for efficient database queries
-- **Mapping Extensions**: Create `ToDto()` and `ToEntity()` extension methods
+- **Mapping Extensions**: Create `ToDto()`, `ToEntity()`, and `UpdateFromDto()` extension methods
 - **Controller Actions**: Follow REST conventions with proper HTTP status codes
+- **Progress Tracking Separation**: Milestone progress (`Current`) is intentionally separated from general updates to preserve progress tracking integrity
 
 ### Container Development
 1. **First Time Setup**: Run `./generate-dev-cert.sh` to create HTTPS certificates
@@ -200,6 +209,23 @@ The API provides full CRUD operations for habit management:
 - Request Body: `CreateHabitDto`
 - Response: `HabitDto` of the created habit with `201 Created` status
 - Returns `Location` header pointing to the created resource
+
+#### Update Habit (Full)
+- **PUT** `/habits/{id}`
+- Completely replaces an existing habit
+- Request Body: `UpdateHabitDto`
+- Response: `204 No Content` on success, `404 Not Found` if habit doesn't exist
+- Parameter: `id` (string) - The habit identifier
+- **Note**: Preserves milestone progress (`Current` value) while allowing target updates
+
+#### Update Habit (Partial)
+- **PATCH** `/habits/{id}`
+- Partially modifies an existing habit using JSON Patch operations
+- Request Body: `JsonPatchDocument<HabitDto>` with Content-Type `application/json-patch+json`
+- Response: `204 No Content` on success, `404 Not Found` if habit doesn't exist, `400 Bad Request` for validation errors
+- Parameter: `id` (string) - The habit identifier
+- **Current Implementation**: Only updates `Name`, `Description`, and `UpdatedAtUtc` fields
+- **Validation**: Full model validation is performed on the patched result before applying changes
 
 ### Example API Usage
 
@@ -252,6 +278,54 @@ POST /habits
   "lastCompletedAtUtc": null
 }
 ```
+
+#### Updating a Habit (Full Replacement)
+```json
+PUT /habits/h_01JDQM7Z8K2X3Y4W5V6U7T8S9R
+Content-Type: application/json
+
+{
+  "name": "Updated Daily Exercise",
+  "description": "45 minutes of physical activity",
+  "type": "Measurable",
+  "frequency": {
+    "type": "Daily",
+    "timesPerPeriod": 1
+  },
+  "target": {
+    "value": 45,
+    "unit": "minutes"
+  },
+  "milestone": {
+    "target": 150
+  }
+}
+```
+
+**Response**: `204 No Content`
+
+#### Partially Updating a Habit (JSON Patch)
+```json
+PATCH /habits/h_01JDQM7Z8K2X3Y4W5V6U7T8S9R
+Content-Type: application/json-patch+json
+
+[
+  {
+    "op": "replace",
+    "path": "/name",
+    "value": "Morning Exercise"
+  },
+  {
+    "op": "replace",
+    "path": "/description",
+    "value": "30-minute workout routine"
+  }
+]
+```
+
+**Response**: `204 No Content`
+
+**Note**: Currently, only `name` and `description` operations are fully implemented in the PATCH endpoint.
 
 ### Base URLs
 
