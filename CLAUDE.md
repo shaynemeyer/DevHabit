@@ -153,7 +153,13 @@ For HTTPS support in containers:
    - **Database**: Configure entity mappings in `Database/Configurations/`
    - **Mappings**: Create extension methods for entity-DTO conversions
    - **Queries**: Use expression projections for efficient database queries
-2. **Database Changes**: Use EF Core migrations (`dotnet ef migrations add {Name}`)
+2. **Database Changes**: Use EF Core migrations for schema modifications
+   - `dotnet ef migrations add {Name}` - Create a new migration
+   - `dotnet ef database update` - Apply pending migrations to database
+   - `dotnet ef migrations list` - View migration history and status
+   - **Current Migration History:**
+     - `20251121221333_Add_Habits` - Initial Habits table creation with full schema
+     - `20251126222141_UpdateHabitModel` - Column rename: `frequency_time_per_period` → `frequency_times_per_period`
 3. **Configuration**: Update appsettings files for new configuration requirements
 4. **Dependencies**: Add new PackageReference entries and update Directory.Packages.props
 

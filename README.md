@@ -196,6 +196,9 @@ DevHabit/
 | `dotnet watch --project DevHabit.Api` | Run with hot reload |
 | `dotnet test` | Run tests (when test projects are added) |
 | `dotnet restore` | Restore NuGet packages |
+| `dotnet ef migrations list --project DevHabit.Api` | View migration status |
+| `dotnet ef migrations add {Name} --project DevHabit.Api` | Create new migration |
+| `dotnet ef database update --project DevHabit.Api` | Apply pending migrations |
 
 ## Configuration
 
@@ -221,6 +224,26 @@ The application uses standard ASP.NET Core configuration patterns. Set environme
 - **Docker**: PostgreSQL container with automatic connection setup
 - **Local**: Requires local PostgreSQL installation or Docker container
 - Connection strings configured per environment in respective `appsettings` files
+
+### Database Migrations
+The project uses Entity Framework Core migrations to manage database schema changes:
+
+#### Migration Commands
+```bash
+# View current migration status
+dotnet ef migrations list --project DevHabit.Api
+
+# Create a new migration (when model changes are made)
+dotnet ef migrations add {MigrationName} --project DevHabit.Api
+
+# Apply pending migrations to database
+dotnet ef database update --project DevHabit.Api
+```
+
+#### Migration History
+Current database migrations applied:
+- **`20251121221333_Add_Habits`** - Initial Habits table creation with full schema
+- **`20251126222141_UpdateHabitModel`** - Column rename for naming consistency (`frequency_time_per_period` → `frequency_times_per_period`)
 
 ## Troubleshooting
 
@@ -281,6 +304,51 @@ Once the API is running, the following endpoints are available:
 - `GET http://localhost:9000/habits/{id}` - Get habit by ID
 
 The API returns seeded habit data for testing purposes.
+
+#### Database Migration Issues
+**Problem**: Getting `The model for context 'ApplicationDbContext' has pending changes` error.
+
+**Solution**: Your entity models have changed but no migration exists for the changes:
+```bash
+# Create a migration for the pending changes
+dotnet ef migrations add UpdateModel --project DevHabit.Api
+
+# Apply the migration to the database
+dotnet ef database update --project DevHabit.Api
+```
+
+**Problem**: Migration file fails to build with code analysis errors (e.g., IDE0161 namespace style).
+
+**Solution**: EF Core generates traditional namespaces, but the project requires file-scoped namespaces:
+```csharp
+// Change from:
+namespace DevHabit.Api.Migrations.Application
+{
+    public partial class MigrationName : Migration
+    {
+        // ...
+    }
+}
+
+// To:
+namespace DevHabit.Api.Migrations.Application;
+
+public partial class MigrationName : Migration
+{
+    // ...
+}
+```
+
+**Problem**: Database connection issues during migration.
+
+**Solution**: Ensure the database is running before applying migrations:
+```bash
+# Start PostgreSQL container first
+docker-compose up devhabit.postgres -d
+
+# Then apply migrations
+dotnet ef database update --project DevHabit.Api
+```
 
 ## Testing
 

@@ -63,6 +63,8 @@ DevHabit.Api/
 │   └── Extensions/
 │       └── DatabaseExtensions.cs  # Database setup extensions
 ├── Migrations/Application/         # EF Core migrations
+│   ├── 20251121221333_Add_Habits.cs          # Initial Habits table creation
+│   └── 20251126222141_UpdateHabitModel.cs    # Column rename fix
 ├── Properties/
 │   └── launchSettings.json        # Development server profiles
 ├── appsettings.json               # Base configuration
@@ -118,6 +120,14 @@ Via `docker-compose.yml`:
 - **Snake case naming convention** for database objects
 - **Custom migration history table** with application schema
 - **Automatic migrations** applied in development mode
+
+### **Migration Management**
+The project maintains database schema through EF Core migrations:
+- **Migration files** stored in `Migrations/Application/` directory
+- **Applied migrations** tracked in `dev_habit.__EFMigrationsHistory` table
+- **Current schema version**: 2 migrations applied
+  - Initial table creation with full habit entity structure
+  - Column name consistency improvements (frequency_times_per_period)
 
 ## **Current API Endpoints**
 
