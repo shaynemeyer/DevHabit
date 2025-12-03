@@ -3,6 +3,7 @@ using System;
 using DevHabit.Api.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DevHabit.Api.Migrations.Application
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251203011050_Add_Tags")]
+    partial class Add_Tags
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -102,13 +105,13 @@ namespace DevHabit.Api.Migrations.Application
                         .HasColumnName("updated_at_utc");
 
                     b.HasKey("Id")
-                        .HasName("pk_tags");
+                        .HasName("pk_tag");
 
                     b.HasIndex("Name")
                         .IsUnique()
-                        .HasDatabaseName("ix_tags_name");
+                        .HasDatabaseName("ix_tag_name");
 
-                    b.ToTable("tags", "dev_habit");
+                    b.ToTable("tag", "dev_habit");
                 });
 
             modelBuilder.Entity("DevHabit.Api.Entities.Habit", b =>
