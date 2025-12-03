@@ -47,17 +47,33 @@ The project enforces strict code quality standards:
 - **Implicit Usings**: Enabled to reduce boilerplate
 
 ### Current Structure
-- **Controllers/**: API controllers including HabitsController for habit management
-- **Entities/**: Domain entities including Habit with complex value objects (Frequency, Target, Milestone)
-- **DTOs/**: Data Transfer Objects organized by feature (e.g., DTOs/Habits/)
-  - **HabitDto**: Read model for habit data
-  - **CreateHabitDto**: Input model for habit creation
-  - **UpdateHabitDto**: Input model for full habit updates (PUT operations)
-  - **UpdateMilestoneDto**: Simplified milestone update model (only Target, preserves Current progress)
-  - **HabitMappings**: Extension methods for entity-DTO conversions including UpdateFromDto
-  - **HabitQueries**: LINQ expression projections for efficient database queries
+- **Controllers/**: API controllers for resource management
+  - **HabitsController**: Complete CRUD operations for habit management including tagging support
+  - **TagsController**: Complete CRUD operations for tag management
+  - **HabitTagsController**: Association management between habits and tags
+- **Entities/**: Domain entities including complex value objects
+  - **Habit**: Core domain entity with complex value objects (Frequency, Target, Milestone)
+  - **Tag**: Tag entity for categorizing habits (Id, Name, Description, timestamps)
+  - **HabitTag**: Junction entity for many-to-many habit-tag relationships
+- **DTOs/**: Data Transfer Objects organized by feature
+  - **DTOs/Habits/**:
+    - **HabitDto**: Basic read model for habit data
+    - **HabitWithTagsDto**: Enhanced read model including associated tags array
+    - **CreateHabitDto**: Input model for habit creation
+    - **UpdateHabitDto**: Input model for full habit updates (PUT operations)
+    - **HabitMappings**: Extension methods for entity-DTO conversions including UpdateFromDto
+    - **HabitQueries**: LINQ expression projections for efficient database queries
+  - **DTOs/Tags/**:
+    - **TagDto**: Read model for tag data
+    - **CreateTagDto**: Input model for tag creation
+    - **UpdateTagDto**: Input model for tag updates
+    - **TagsCollectionDto**: Collection wrapper for tag arrays
+    - **TagMappings**: Extension methods for tag entity-DTO conversions
+    - **TagQueries**: LINQ expression projections for tag queries
+  - **DTOs/HabitTags/**:
+    - **UpsertHabitTagsDto**: Input model for associating tags with habits
 - **Database/**: Entity Framework Core configuration
-  - **ApplicationDbContext**: Main database context with Habits DbSet
+  - **ApplicationDbContext**: Main database context with Habits, Tags, and HabitTags DbSets
   - **Configurations/**: Entity configurations using Fluent API
   - **Migrations/**: EF Core migration files
 - **Extensions/**: Extension methods including database setup
@@ -118,6 +134,23 @@ The core domain entity that represents a habit with the following properties:
 - **CreatedAtUtc**: Timestamp of creation
 - **UpdatedAtUtc**: Last modification timestamp
 - **LastCompletedAtUtc**: Last completion timestamp
+- **HabitTags**: Collection navigation property for associated tags
+
+### Tag Entity
+Domain entity for categorizing and organizing habits:
+- **Id**: Unique identifier using Version 7 GUIDs with "t_" prefix
+- **Name**: Required tag name (max 50 characters, unique constraint)
+- **Description**: Optional tag description (max 500 characters)
+- **CreatedAtUtc**: Timestamp of creation
+- **UpdatedAtUtc**: Last modification timestamp
+
+### HabitTag Entity
+Junction entity establishing many-to-many relationships between habits and tags:
+- **HabitId**: Foreign key to Habit entity
+- **TagId**: Foreign key to Tag entity
+- **CreatedAtUtc**: Timestamp when association was created
+- **Composite Primary Key**: (HabitId, TagId)
+- **Cascade Delete**: Automatically removes associations when parent entities are deleted
 
 ### Data Architecture Patterns
 - **Domain-Driven Design**: Clear separation between entities and DTOs
@@ -168,6 +201,8 @@ For HTTPS support in containers:
    - **Current Migration History:**
      - `20251121221333_Add_Habits` - Initial Habits table creation with full schema
      - `20251126222141_UpdateHabitModel` - Column rename: `frequency_time_per_period` → `frequency_times_per_period`
+     - `20251203011050_Add_Tags` - Tags table creation with unique name constraint
+     - `20251203165332_Add_HabitTags` - Junction table for many-to-many habit-tag relationships
 3. **Configuration**: Update appsettings files for new configuration requirements
 4. **Dependencies**: Add new PackageReference entries and update Directory.Packages.props
 
@@ -199,8 +234,8 @@ The API provides full CRUD operations for habit management:
 
 #### Get Single Habit
 - **GET** `/habits/{id}`
-- Retrieves a specific habit by its ID
-- Response: `HabitDto` object or 404 if not found
+- Retrieves a specific habit by its ID including associated tags
+- Response: `HabitWithTagsDto` object or 404 if not found
 - Parameter: `id` (string) - The habit identifier
 
 #### Create Habit
@@ -227,6 +262,68 @@ The API provides full CRUD operations for habit management:
 - **Current Implementation**: Only updates `Name`, `Description`, and `UpdatedAtUtc` fields
 - **Validation**: Full model validation is performed on the patched result before applying changes
 
+#### Delete Habit
+- **DELETE** `/habits/{id}`
+- Permanently deletes a habit and all associated tag relationships
+- Response: `204 No Content` on success, `404 Not Found` if habit doesn't exist
+- Parameter: `id` (string) - The habit identifier
+- **Note**: Cascade deletion automatically removes all HabitTag associations
+
+### Tags API
+Complete CRUD operations for tag management:
+
+#### Get All Tags
+- **GET** `/tags`
+- Returns a collection of all available tags
+- Response: `TagsCollectionDto` containing array of `TagDto` objects
+
+#### Get Single Tag
+- **GET** `/tags/{id}`
+- Retrieves a specific tag by its ID
+- Response: `TagDto` object or 404 if not found
+- Parameter: `id` (string) - The tag identifier
+
+#### Create Tag
+- **POST** `/tags`
+- Creates a new tag
+- Request Body: `CreateTagDto`
+- Response: `TagDto` of the created tag with `201 Created` status
+- Returns `Location` header pointing to the created resource
+- **Validation**: Tag names must be unique (returns `409 Conflict` if duplicate)
+
+#### Update Tag
+- **PUT** `/tags/{id}`
+- Completely replaces an existing tag
+- Request Body: `UpdateTagDto`
+- Response: `204 No Content` on success, `404 Not Found` if tag doesn't exist
+- Parameter: `id` (string) - The tag identifier
+
+#### Delete Tag
+- **DELETE** `/tags/{id}`
+- Permanently deletes a tag and all associated habit relationships
+- Response: `204 No Content` on success, `404 Not Found` if tag doesn't exist
+- Parameter: `id` (string) - The tag identifier
+- **Note**: Cascade deletion automatically removes all HabitTag associations
+
+### Habit-Tag Association API
+Manages the many-to-many relationships between habits and tags:
+
+#### Upsert Habit Tags
+- **PUT** `/habits/{habitId}/tags`
+- Replaces all tag associations for a specific habit
+- Request Body: `UpsertHabitTagsDto` containing array of tag IDs
+- Response: `200 OK` on success, `204 No Content` if no changes, `404 Not Found` if habit doesn't exist, `400 Bad Request` if any tag IDs are invalid
+- Parameter: `habitId` (string) - The habit identifier
+- **Behavior**: Removes existing associations and creates new ones based on provided tag IDs
+
+#### Remove Tag from Habit
+- **DELETE** `/habits/{habitId}/tags/{tagId}`
+- Removes a specific tag association from a habit
+- Response: `204 No Content` on success, `404 Not Found` if association doesn't exist
+- Parameters:
+  - `habitId` (string) - The habit identifier
+  - `tagId` (string) - The tag identifier
+
 ### Example API Usage
 
 #### Creating a Daily Exercise Habit
@@ -251,7 +348,7 @@ POST /habits
 }
 ```
 
-#### Response Example
+#### Response Example (HabitWithTagsDto from GET /habits/{id})
 ```json
 {
   "id": "h_01JDQM7Z8K2X3Y4W5V6U7T8S9R",
@@ -275,7 +372,8 @@ POST /habits
   },
   "createdAtUtc": "2024-11-25T12:00:00Z",
   "updatedAtUtc": null,
-  "lastCompletedAtUtc": null
+  "lastCompletedAtUtc": null,
+  "tags": ["Fitness", "Health", "Morning Routine"]
 }
 ```
 
@@ -326,6 +424,47 @@ Content-Type: application/json-patch+json
 **Response**: `204 No Content`
 
 **Note**: Currently, only `name` and `description` operations are fully implemented in the PATCH endpoint.
+
+#### Creating a Tag
+```json
+POST /tags
+{
+  "name": "Fitness",
+  "description": "Health and fitness related habits"
+}
+```
+
+**Response**: `201 Created` with `TagDto`
+```json
+{
+  "id": "t_01JDQM8A9L3N4P5Q6R7S8T9U0V",
+  "name": "Fitness",
+  "description": "Health and fitness related habits",
+  "createdAtUtc": "2024-12-03T12:00:00Z",
+  "updatedAtUtc": null
+}
+```
+
+#### Associating Tags with a Habit
+```json
+PUT /habits/h_01JDQM7Z8K2X3Y4W5V6U7T8S9R/tags
+{
+  "tagIds": [
+    "t_01JDQM8A9L3N4P5Q6R7S8T9U0V",
+    "t_01JDQM8B0M4O5P6Q7R8S9T0U1W",
+    "t_01JDQM8C1N5P6Q7R8S9T0U1W2X"
+  ]
+}
+```
+
+**Response**: `200 OK`
+
+#### Removing a Tag from a Habit
+```json
+DELETE /habits/h_01JDQM7Z8K2X3Y4W5V6U7T8S9R/tags/t_01JDQM8A9L3N4P5Q6R7S8T9U0V
+```
+
+**Response**: `204 No Content`
 
 ### Base URLs
 
