@@ -31,6 +31,7 @@ builder.Services.AddProblemDetails(options =>
     };
 });
 
+builder.Services.AddExceptionHandler<ValidationExceptionHandler>();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
