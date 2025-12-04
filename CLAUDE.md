@@ -76,6 +76,11 @@ The project enforces strict code quality standards:
   - **ApplicationDbContext**: Main database context with Habits, Tags, and HabitTags DbSets
   - **Configurations/**: Entity configurations using Fluent API
   - **Migrations/**: EF Core migration files
+- **Services/**: Application services and infrastructure
+  - **Services/Sorting/**: Dynamic sorting infrastructure with type-safe field mapping
+- **Middleware/**: Custom middleware components
+  - **ValidationExceptionHandler**: FluentValidation exception handling
+  - **GlobalExceptionHandler**: General exception handling middleware
 - **Extensions/**: Extension methods including database setup
 - **Program.cs**: Application entry point with service configuration
 
@@ -89,6 +94,34 @@ The project enforces strict code quality standards:
 
 ### Dependency Injection
 The project uses ASP.NET Core's built-in dependency injection container. Services are configured in Program.cs.
+
+### Dynamic Sorting Service
+The project includes a flexible sorting system that provides type-safe, dynamic sorting capabilities:
+- **SortMappingProvider**: Main service that manages field mappings between DTOs and entities
+- **SortMappingDefinition**: Defines which DTO fields map to which entity properties
+- **SortMapping**: Individual field mapping configuration
+- **QueryableExtensions**: Extension method `ApplySort()` for applying dynamic sorting to IQueryable
+- **Features:**
+  - Type-safe mapping validation at request time
+  - Support for nested property sorting (e.g., `frequency.type`, `target.value`)
+  - Multiple field sorting with direction control (asc/desc)
+  - Automatic validation of sort parameter field names
+- **Usage**: Sort parameters use format: `field1 asc,field2 desc,field3` (default direction is ascending)
+
+### FluentValidation Framework
+The project implements comprehensive input validation using FluentValidation:
+- **FluentValidation.DependencyInjectionExtensions**: Automatic validator discovery and registration
+- **Custom Validators**: Type-specific validators for DTOs (e.g., `CreateHabitDtoValidator`, `CreateTagDtoValidator`)
+- **Validation Rules**: Comprehensive validation including:
+  - Field length constraints and required field validation
+  - Enum value validation for habit types and frequency periods
+  - Business rule validation (e.g., unit compatibility with habit type)
+  - Custom validation logic (e.g., future date validation for end dates)
+- **Exception Handling**: Custom `ValidationExceptionHandler` middleware that:
+  - Catches `ValidationException` from FluentValidation
+  - Converts validation errors to structured problem details format
+  - Returns `400 Bad Request` with detailed error information grouped by field
+  - Integrates with ASP.NET Core's problem details framework
 
 ### JSON Patch Support
 The API supports JSON Patch operations for partial updates:
@@ -104,6 +137,15 @@ The API supports JSON Patch operations for partial updates:
 All package versions are managed centrally through Directory.Packages.props. When adding new packages:
 1. Add PackageReference in the project file without version
 2. Define the version in Directory.Packages.props
+
+#### Key Package Dependencies
+- **FluentValidation.DependencyInjectionExtensions** (v12.1.1): Comprehensive input validation framework
+- **System.Linq.Dynamic.Core** (v1.7.1): Dynamic LINQ expression parsing for sorting functionality
+- **Microsoft.AspNetCore.JsonPatch** (v9.0.11): JSON Patch support for partial updates
+- **Microsoft.AspNetCore.Mvc.NewtonsoftJson** (v9.0.11): Newtonsoft.Json integration for JSON Patch
+- **EFCore.NamingConventions** (v9.0.0): Snake case naming convention for PostgreSQL
+- **Npgsql.EntityFrameworkCore.PostgreSQL** (v9.0.4): PostgreSQL database provider
+- **OpenTelemetry packages**: Comprehensive observability and monitoring
 
 ### Code Analysis Configuration
 The project uses comprehensive code analysis:
@@ -158,6 +200,10 @@ Junction entity establishing many-to-many relationships between habits and tags:
 - **Efficient Projections**: Using Expression<Func<T, TResult>> for database queries
 - **Mapping Extensions**: Clean entity-DTO conversions with extension methods
 - **UUID v7 Identifiers**: Time-ordered identifiers for better database performance
+- **Query Parameter Objects**: Dedicated DTOs for request parameters with model binding attributes
+- **Dynamic Sorting**: Type-safe field mapping system with validation and flexible query building
+- **Comprehensive Validation**: FluentValidation-based input validation with business rule enforcement
+- **Structured Exception Handling**: Middleware-based validation error handling with problem details format
 
 ## Container Deployment
 
@@ -229,8 +275,19 @@ The API provides full CRUD operations for habit management:
 
 #### Get All Habits
 - **GET** `/habits`
-- Returns a collection of all habits with pagination support
-- Response: `HabitsCollectionDto` containing array of `HabitDto` objects
+- Returns a collection of habits with advanced querying capabilities
+- **Query Parameters:**
+  - `q` (string): Search term to filter habits by name or description (case-insensitive)
+  - `type` (HabitType): Filter habits by type (`Binary` or `Measurable`)
+  - `status` (HabitStatus): Filter habits by status (`Ongoing` or `Completed`)
+  - `sort` (string): Sort results by specified fields. Supports multiple fields comma-separated with optional direction (e.g., `name asc,createdAtUtc desc`)
+- **Supported Sort Fields:**
+  - `name`, `description`, `type`, `status`, `endDate`
+  - `frequency.type`, `frequency.timesPerPeriod`
+  - `target.value`, `target.unit`
+  - `createdAtUtc`, `updatedAtUtc`, `lastCompletedAtUtc`
+- Response: `HabitsCollectionDto` containing array of filtered and sorted `HabitDto` objects
+- Returns `400 Bad Request` if invalid sort parameters are provided
 
 #### Get Single Habit
 - **GET** `/habits/{id}`
@@ -240,10 +297,21 @@ The API provides full CRUD operations for habit management:
 
 #### Create Habit
 - **POST** `/habits`
-- Creates a new habit
+- Creates a new habit with comprehensive validation
 - Request Body: `CreateHabitDto`
 - Response: `HabitDto` of the created habit with `201 Created` status
 - Returns `Location` header pointing to the created resource
+- **Validation Rules:**
+  - `Name`: Required, 3-100 characters
+  - `Description`: Optional, max 500 characters
+  - `Type`: Must be valid `HabitType` enum value
+  - `Frequency.TimesPerPeriod`: Must be greater than 0
+  - `Target.Value`: Must be greater than 0
+  - `Target.Unit`: Must be one of: minutes, hours, steps, km, cal, pages, books, tasks, sessions
+  - `EndDate`: Must be in the future (if provided)
+  - `Milestone.Target`: Must be greater than 0 (if milestone provided)
+  - **Unit Compatibility**: Binary habits can only use "sessions" or "tasks" units; Measurable habits can use any allowed unit
+- Returns `400 Bad Request` with detailed validation errors if validation fails
 
 #### Update Habit (Full)
 - **PUT** `/habits/{id}`
@@ -325,6 +393,66 @@ Manages the many-to-many relationships between habits and tags:
   - `tagId` (string) - The tag identifier
 
 ### Example API Usage
+
+#### Querying Habits with Advanced Parameters
+
+##### Search for Habits by Name or Description
+```http
+GET /habits?q=exercise
+```
+
+##### Filter Habits by Type and Status
+```http
+GET /habits?type=Measurable&status=Ongoing
+```
+
+##### Sort Habits by Multiple Fields
+```http
+GET /habits?sort=name asc,createdAtUtc desc
+```
+
+##### Complex Query with All Parameters
+```http
+GET /habits?q=daily&type=Measurable&status=Ongoing&sort=target.value desc,name asc
+```
+
+#### Validation Error Example
+```http
+POST /habits
+Content-Type: application/json
+
+{
+  "name": "Ex",  // Too short (min 3 characters)
+  "type": "Binary",
+  "target": {
+    "value": -1,  // Invalid (must be > 0)
+    "unit": "minutes"  // Invalid for Binary type
+  },
+  "frequency": {
+    "type": "Daily",
+    "timesPerPeriod": 0  // Invalid (must be > 0)
+  }
+}
+```
+
+**Response**: `400 Bad Request`
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "One or more validation errors occurred",
+  "extensions": {
+    "requestId": "0HN7KQJQV2QQT:00000001",
+    "errors": {
+      "name": ["Habit name must be between 3 and 100 characters"],
+      "target.value": ["Target value must be greater than 0"],
+      "target.unit": ["Target unit is not compatible with the habit type"],
+      "frequency.timesperperiod": ["Frequency must be greater than 0"]
+    }
+  }
+}
+```
 
 #### Creating a Daily Exercise Habit
 ```json
