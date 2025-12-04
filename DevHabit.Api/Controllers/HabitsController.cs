@@ -1,6 +1,7 @@
 using System.Linq.Dynamic.Core;
 using System.Security.Cryptography.X509Certificates;
 using DevHabit.Api.Database;
+using DevHabit.Api.DTOs.Common;
 using DevHabit.Api.DTOs.Habits;
 using DevHabit.Api.Entities;
 using DevHabit.Api.Services.Sorting;
@@ -18,7 +19,7 @@ namespace DevHabit.Api.Controllers;
 public class HabitsController(ApplicationDbContext dbContext) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<HabitsCollectionDto>> GetHabits(
+    public async Task<ActionResult<PaginationResult<HabitDto>>> GetHabits(
         [FromQuery] HabitsQueryParameters query,
         SortMappingProvider sortMappingProvider
     )
@@ -34,7 +35,7 @@ public class HabitsController(ApplicationDbContext dbContext) : ControllerBase
 
         SortMapping[] sortMappings = sortMappingProvider.GetMappings<HabitDto, Habit>();
 
-        List<HabitDto> habits = await dbContext
+        IQueryable<HabitDto> habitsQuery = dbContext
             .Habits
             .Where(h => query.Search == null ||
                 h.Name.Contains(query.Search, StringComparison.CurrentCultureIgnoreCase) ||
@@ -42,15 +43,11 @@ public class HabitsController(ApplicationDbContext dbContext) : ControllerBase
             .Where(h => query.Type == null || h.Type == query.Type)
             .Where(h => query.Status == null || h.Status == query.Status)
             .ApplySort(query.Sort, sortMappings)
-            .Select(HabitQueries.ProjectToDto())
-            .ToListAsync();
+            .Select(HabitQueries.ProjectToDto());
 
-        var habitsCollectionDto = new HabitsCollectionDto
-        {
-            Data = habits
-        };
+        PaginationResult<HabitDto> paginationResult = await PaginationResult<HabitDto>.CreateAsync(habitsQuery, query.Page, query.PageSize);
 
-        return Ok(habitsCollectionDto);
+        return Ok(paginationResult);
     }
 
     [HttpGet("{id}")]
