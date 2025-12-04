@@ -56,11 +56,15 @@ The project enforces strict code quality standards:
   - **Tag**: Tag entity for categorizing habits (Id, Name, Description, timestamps)
   - **HabitTag**: Junction entity for many-to-many habit-tag relationships
 - **DTOs/**: Data Transfer Objects organized by feature
+  - **DTOs/Common/**:
+    - **PaginationResult<T>**: Generic pagination wrapper with metadata (page, pageSize, totalCount, etc.)
+    - **ICollectionResponse<T>**: Base interface for collection responses
   - **DTOs/Habits/**:
     - **HabitDto**: Basic read model for habit data
     - **HabitWithTagsDto**: Enhanced read model including associated tags array
     - **CreateHabitDto**: Input model for habit creation
     - **UpdateHabitDto**: Input model for full habit updates (PUT operations)
+    - **HabitsQueryParameters**: Query parameters for filtering, searching, sorting, and pagination
     - **HabitMappings**: Extension methods for entity-DTO conversions including UpdateFromDto
     - **HabitQueries**: LINQ expression projections for efficient database queries
   - **DTOs/Tags/**:
@@ -122,6 +126,14 @@ The project implements comprehensive input validation using FluentValidation:
   - Converts validation errors to structured problem details format
   - Returns `400 Bad Request` with detailed error information grouped by field
   - Integrates with ASP.NET Core's problem details framework
+
+### Pagination Infrastructure
+The API implements offset-based pagination for collection endpoints:
+- **PaginationResult<T>**: Generic pagination wrapper providing metadata and items
+- **Pagination Properties**: `Page`, `PageSize`, `TotalCount`, `TotalPages`, `HasPreviousPage`, `HasNextPage`
+- **Default Values**: Page 1, PageSize 10 (configurable via query parameters)
+- **Implementation**: Uses Entity Framework's `Skip()` and `Take()` methods for efficient database queries
+- **Usage**: Currently implemented on the `GET /habits` endpoint with plans for other collection endpoints
 
 ### JSON Patch Support
 The API supports JSON Patch operations for partial updates:
@@ -202,6 +214,7 @@ Junction entity establishing many-to-many relationships between habits and tags:
 - **UUID v7 Identifiers**: Time-ordered identifiers for better database performance
 - **Query Parameter Objects**: Dedicated DTOs for request parameters with model binding attributes
 - **Dynamic Sorting**: Type-safe field mapping system with validation and flexible query building
+- **Offset-Based Pagination**: Generic pagination system with metadata and configurable page sizes
 - **Comprehensive Validation**: FluentValidation-based input validation with business rule enforcement
 - **Structured Exception Handling**: Middleware-based validation error handling with problem details format
 
@@ -275,18 +288,27 @@ The API provides full CRUD operations for habit management:
 
 #### Get All Habits
 - **GET** `/habits`
-- Returns a collection of habits with advanced querying capabilities
+- Returns a paginated collection of habits with advanced querying capabilities
 - **Query Parameters:**
   - `q` (string): Search term to filter habits by name or description (case-insensitive)
   - `type` (HabitType): Filter habits by type (`Binary` or `Measurable`)
   - `status` (HabitStatus): Filter habits by status (`Ongoing` or `Completed`)
   - `sort` (string): Sort results by specified fields. Supports multiple fields comma-separated with optional direction (e.g., `name asc,createdAtUtc desc`)
+  - `page` (int): Page number for pagination (default: 1)
+  - `pageSize` (int): Number of items per page (default: 10)
 - **Supported Sort Fields:**
   - `name`, `description`, `type`, `status`, `endDate`
   - `frequency.type`, `frequency.timesPerPeriod`
   - `target.value`, `target.unit`
   - `createdAtUtc`, `updatedAtUtc`, `lastCompletedAtUtc`
-- Response: `HabitsCollectionDto` containing array of filtered and sorted `HabitDto` objects
+- **Response**: `PaginationResult<HabitDto>` containing:
+  - `items`: Array of filtered and sorted `HabitDto` objects
+  - `page`: Current page number
+  - `pageSize`: Number of items per page
+  - `totalCount`: Total number of habits matching the query
+  - `totalPages`: Total number of pages available
+  - `hasPreviousPage`: Boolean indicating if there's a previous page
+  - `hasNextPage`: Boolean indicating if there's a next page
 - Returns `400 Bad Request` if invalid sort parameters are provided
 
 #### Get Single Habit
@@ -411,9 +433,18 @@ GET /habits?type=Measurable&status=Ongoing
 GET /habits?sort=name asc,createdAtUtc desc
 ```
 
+##### Pagination Examples
+```http
+GET /habits?page=2&pageSize=5
+```
+
+```http
+GET /habits?page=1&pageSize=20&sort=name asc
+```
+
 ##### Complex Query with All Parameters
 ```http
-GET /habits?q=daily&type=Measurable&status=Ongoing&sort=target.value desc,name asc
+GET /habits?q=daily&type=Measurable&status=Ongoing&sort=target.value desc,name asc&page=1&pageSize=15
 ```
 
 #### Validation Error Example
@@ -502,6 +533,68 @@ POST /habits
   "updatedAtUtc": null,
   "lastCompletedAtUtc": null,
   "tags": ["Fitness", "Health", "Morning Routine"]
+}
+```
+
+#### Paginated Response Example (PaginationResult<HabitDto> from GET /habits)
+```json
+{
+  "items": [
+    {
+      "id": "h_01JDQM7Z8K2X3Y4W5V6U7T8S9R",
+      "name": "Daily Exercise",
+      "description": "30 minutes of physical activity",
+      "type": "Measurable",
+      "frequency": {
+        "type": "Daily",
+        "timesPerPeriod": 1
+      },
+      "target": {
+        "value": 30,
+        "unit": "minutes"
+      },
+      "status": "Ongoing",
+      "isArchived": false,
+      "endDate": null,
+      "milestone": {
+        "target": 100,
+        "current": 15
+      },
+      "createdAtUtc": "2024-11-25T12:00:00Z",
+      "updatedAtUtc": null,
+      "lastCompletedAtUtc": "2024-12-01T10:30:00Z"
+    },
+    {
+      "id": "h_01JDQM8A9L3N4P5Q6R7S8T9U0V",
+      "name": "Read Daily",
+      "description": "Read for at least 20 minutes",
+      "type": "Measurable",
+      "frequency": {
+        "type": "Daily",
+        "timesPerPeriod": 1
+      },
+      "target": {
+        "value": 20,
+        "unit": "minutes"
+      },
+      "status": "Ongoing",
+      "isArchived": false,
+      "endDate": null,
+      "milestone": {
+        "target": 50,
+        "current": 23
+      },
+      "createdAtUtc": "2024-11-20T15:00:00Z",
+      "updatedAtUtc": "2024-11-25T16:00:00Z",
+      "lastCompletedAtUtc": "2024-12-02T20:45:00Z"
+    }
+  ],
+  "page": 1,
+  "pageSize": 10,
+  "totalCount": 25,
+  "totalPages": 3,
+  "hasPreviousPage": false,
+  "hasNextPage": true
 }
 ```
 

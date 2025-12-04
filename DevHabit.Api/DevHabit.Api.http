@@ -17,6 +17,18 @@ Accept: application/json
 
 ###
 
+# Get all habits with pagination (Docker HTTPS)
+GET {{DevHabit.Api_HTTPS}}/habits?page=1&pageSize=5
+Accept: application/json
+
+###
+
+# Get all habits with search and pagination (Docker HTTPS)
+GET {{DevHabit.Api_HTTPS}}/habits?q=exercise&page=1&pageSize=10&sort=name asc
+Accept: application/json
+
+###
+
 # Get all habits (Docker HTTP - redirects to HTTPS)
 GET {{DevHabit.Api_HTTP}}/habits
 Accept: application/json
@@ -25,6 +37,12 @@ Accept: application/json
 
 # Get all habits (Local Development HTTPS)
 GET {{DevHabit.Api_Local_HTTPS}}/habits
+Accept: application/json
+
+###
+
+# Get all habits with pagination (Local Development HTTPS)
+GET {{DevHabit.Api_Local_HTTPS}}/habits?page=1&pageSize=5&sort=createdAtUtc desc
 Accept: application/json
 
 ###
