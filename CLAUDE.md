@@ -64,7 +64,7 @@ The project enforces strict code quality standards:
     - **HabitWithTagsDto**: Enhanced read model including associated tags array
     - **CreateHabitDto**: Input model for habit creation
     - **UpdateHabitDto**: Input model for full habit updates (PUT operations)
-    - **HabitsQueryParameters**: Query parameters for filtering, searching, sorting, and pagination
+    - **HabitsQueryParameters**: Query parameters for filtering, searching, sorting, pagination, and field selection
     - **HabitMappings**: Extension methods for entity-DTO conversions including UpdateFromDto
     - **HabitQueries**: LINQ expression projections for efficient database queries
   - **DTOs/Tags/**:
@@ -82,6 +82,7 @@ The project enforces strict code quality standards:
   - **Migrations/**: EF Core migration files
 - **Services/**: Application services and infrastructure
   - **Services/Sorting/**: Dynamic sorting infrastructure with type-safe field mapping
+  - **DataShapingService**: Field selection service for response customization
 - **Middleware/**: Custom middleware components
   - **ValidationExceptionHandler**: FluentValidation exception handling
   - **GlobalExceptionHandler**: General exception handling middleware
@@ -111,6 +112,20 @@ The project includes a flexible sorting system that provides type-safe, dynamic 
   - Multiple field sorting with direction control (asc/desc)
   - Automatic validation of sort parameter field names
 - **Usage**: Sort parameters use format: `field1 asc,field2 desc,field3` (default direction is ascending)
+
+### Data Shaping Service
+The project includes a flexible data shaping system for field selection in API responses:
+- **DataShapingService**: Service that allows clients to specify which fields to include in responses
+- **Field Selection**: Uses reflection with caching for performance optimization
+- **Dynamic Response Structure**: Returns `ExpandoObject` containing only requested fields
+- **Validation**: Validates field names against DTO properties to prevent errors
+- **Features:**
+  - Property-level caching using `ConcurrentDictionary` for performance
+  - Case-insensitive field name matching
+  - Support for both single entity and collection shaping
+  - Automatic validation of field parameter values
+- **Usage**: Field parameters use format: `field1,field2,field3` (comma-separated field names)
+- **Benefits**: Reduces bandwidth usage and allows clients to customize response payloads
 
 ### FluentValidation Framework
 The project implements comprehensive input validation using FluentValidation:
@@ -214,6 +229,7 @@ Junction entity establishing many-to-many relationships between habits and tags:
 - **UUID v7 Identifiers**: Time-ordered identifiers for better database performance
 - **Query Parameter Objects**: Dedicated DTOs for request parameters with model binding attributes
 - **Dynamic Sorting**: Type-safe field mapping system with validation and flexible query building
+- **Data Shaping**: Field selection service allowing clients to customize response payloads
 - **Offset-Based Pagination**: Generic pagination system with metadata and configurable page sizes
 - **Comprehensive Validation**: FluentValidation-based input validation with business rule enforcement
 - **Structured Exception Handling**: Middleware-based validation error handling with problem details format
@@ -294,6 +310,7 @@ The API provides full CRUD operations for habit management:
   - `type` (HabitType): Filter habits by type (`Binary` or `Measurable`)
   - `status` (HabitStatus): Filter habits by status (`Ongoing` or `Completed`)
   - `sort` (string): Sort results by specified fields. Supports multiple fields comma-separated with optional direction (e.g., `name asc,createdAtUtc desc`)
+  - `fields` (string): Comma-separated list of fields to include in response (e.g., `id,name,status`)
   - `page` (int): Page number for pagination (default: 1)
   - `pageSize` (int): Number of items per page (default: 10)
 - **Supported Sort Fields:**
@@ -301,21 +318,24 @@ The API provides full CRUD operations for habit management:
   - `frequency.type`, `frequency.timesPerPeriod`
   - `target.value`, `target.unit`
   - `createdAtUtc`, `updatedAtUtc`, `lastCompletedAtUtc`
-- **Response**: `PaginationResult<HabitDto>` containing:
-  - `items`: Array of filtered and sorted `HabitDto` objects
+- **Response**: `PaginationResult<ExpandoObject>` containing:
+  - `items`: Array of filtered and sorted habit objects (shaped based on `fields` parameter)
   - `page`: Current page number
   - `pageSize`: Number of items per page
   - `totalCount`: Total number of habits matching the query
   - `totalPages`: Total number of pages available
   - `hasPreviousPage`: Boolean indicating if there's a previous page
   - `hasNextPage`: Boolean indicating if there's a next page
-- Returns `400 Bad Request` if invalid sort parameters are provided
+- Returns `400 Bad Request` if invalid sort or field parameters are provided
 
 #### Get Single Habit
-- **GET** `/habits/{id}`
+- **GET** `/habits/{id}?fields={fields}`
 - Retrieves a specific habit by its ID including associated tags
-- Response: `HabitWithTagsDto` object or 404 if not found
-- Parameter: `id` (string) - The habit identifier
+- **Query Parameters:**
+  - `fields` (string): Optional comma-separated list of fields to include in response (e.g., `id,name,status`)
+- **Response**: `ExpandoObject` containing habit data (shaped based on `fields` parameter) or 404 if not found
+- **Parameter**: `id` (string) - The habit identifier
+- Returns `400 Bad Request` if invalid field parameters are provided
 
 #### Create Habit
 - **POST** `/habits`
@@ -447,6 +467,19 @@ GET /habits?page=1&pageSize=20&sort=name asc
 GET /habits?q=daily&type=Measurable&status=Ongoing&sort=target.value desc,name asc&page=1&pageSize=15
 ```
 
+##### Field Selection Examples
+```http
+GET /habits?fields=id,name,status
+```
+
+```http
+GET /habits/{id}?fields=name,description,type
+```
+
+```http
+GET /habits?q=exercise&fields=id,name,target&page=1&pageSize=5
+```
+
 #### Validation Error Example
 ```http
 POST /habits
@@ -536,7 +569,7 @@ POST /habits
 }
 ```
 
-#### Paginated Response Example (PaginationResult<HabitDto> from GET /habits)
+#### Paginated Response Example (PaginationResult<ExpandoObject> from GET /habits)
 ```json
 {
   "items": [
@@ -587,6 +620,30 @@ POST /habits
       "createdAtUtc": "2024-11-20T15:00:00Z",
       "updatedAtUtc": "2024-11-25T16:00:00Z",
       "lastCompletedAtUtc": "2024-12-02T20:45:00Z"
+    }
+  ],
+  "page": 1,
+  "pageSize": 10,
+  "totalCount": 25,
+  "totalPages": 3,
+  "hasPreviousPage": false,
+  "hasNextPage": true
+}
+```
+
+#### Field Selection Response Example (GET /habits?fields=id,name,status)
+```json
+{
+  "items": [
+    {
+      "id": "h_01JDQM7Z8K2X3Y4W5V6U7T8S9R",
+      "name": "Daily Exercise",
+      "status": "Ongoing"
+    },
+    {
+      "id": "h_01JDQM8A9L3N4P5Q6R7S8T9U0V",
+      "name": "Read Daily",
+      "status": "Ongoing"
     }
   ],
   "page": 1,
