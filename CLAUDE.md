@@ -87,7 +87,8 @@ The project enforces strict code quality standards:
   - **ValidationExceptionHandler**: FluentValidation exception handling
   - **GlobalExceptionHandler**: General exception handling middleware
 - **Extensions/**: Extension methods including database setup
-- **Program.cs**: Application entry point with service configuration
+- **DependencyInjection.cs**: Organized service registration using extension methods
+- **Program.cs**: Clean application entry point using extension methods for configuration
 
 ### Configuration
 - **appsettings.json**: Base application settings
@@ -98,7 +99,15 @@ The project enforces strict code quality standards:
 ## Key Architectural Patterns
 
 ### Dependency Injection
-The project uses ASP.NET Core's built-in dependency injection container. Services are configured in Program.cs.
+The project uses ASP.NET Core's built-in dependency injection container with a clean, organized approach using extension methods defined in `DependencyInjection.cs`:
+
+- **AddControllers()**: Configures MVC controllers with JSON/XML serialization, OpenAPI support, and proper content negotiation
+- **AddErrorHandling()**: Sets up problem details framework and exception handlers for validation and global error handling
+- **AddDatabase()**: Configures Entity Framework Core with PostgreSQL, snake case naming conventions, and proper schema organization
+- **AddObservability()**: Registers OpenTelemetry for distributed tracing, metrics collection, and observability with OTLP export
+- **AddApplicationServices()**: Registers application-specific services including FluentValidation, dynamic sorting, and data shaping services
+
+This modular approach in `Program.cs` provides clear separation of concerns and makes the application startup configuration easy to understand and maintain.
 
 ### Dynamic Sorting Service
 The project includes a flexible sorting system that provides type-safe, dynamic sorting capabilities:
@@ -288,6 +297,7 @@ For HTTPS support in containers:
 - **Mapping Extensions**: Create `ToDto()`, `ToEntity()`, and `UpdateFromDto()` extension methods
 - **Controller Actions**: Follow REST conventions with proper HTTP status codes
 - **Progress Tracking Separation**: Milestone progress (`Current`) is intentionally separated from general updates to preserve progress tracking integrity
+- **Service Registration**: Use extension methods in `DependencyInjection.cs` to organize service configuration by concern (controllers, database, observability, etc.) and maintain a clean `Program.cs`
 
 ### Container Development
 1. **First Time Setup**: Run `./generate-dev-cert.sh` to create HTTPS certificates
