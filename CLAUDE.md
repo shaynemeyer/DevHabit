@@ -57,8 +57,10 @@ The project enforces strict code quality standards:
   - **HabitTag**: Junction entity for many-to-many habit-tag relationships
 - **DTOs/**: Data Transfer Objects organized by feature
   - **DTOs/Common/**:
-    - **PaginationResult<T>**: Generic pagination wrapper with metadata (page, pageSize, totalCount, etc.)
+    - **PaginationResult<T>**: Generic pagination wrapper with metadata (page, pageSize, totalCount, etc.) and HATEOS links support
     - **ICollectionResponse<T>**: Base interface for collection responses
+    - **LinkDto**: Hypermedia link representation with href, rel, and method properties
+    - **ILinksResponse**: Interface for DTOs that include HATEOS links
   - **DTOs/Habits/**:
     - **HabitDto**: Basic read model for habit data
     - **HabitWithTagsDto**: Enhanced read model including associated tags array
@@ -83,6 +85,7 @@ The project enforces strict code quality standards:
 - **Services/**: Application services and infrastructure
   - **Services/Sorting/**: Dynamic sorting infrastructure with type-safe field mapping
   - **DataShapingService**: Field selection service for response customization
+  - **LinkService**: HATEOS hypermedia link generation service for API navigation
 - **Middleware/**: Custom middleware components
   - **ValidationExceptionHandler**: FluentValidation exception handling
   - **GlobalExceptionHandler**: General exception handling middleware
@@ -105,7 +108,7 @@ The project uses ASP.NET Core's built-in dependency injection container with a c
 - **AddErrorHandling()**: Sets up problem details framework and exception handlers for validation and global error handling
 - **AddDatabase()**: Configures Entity Framework Core with PostgreSQL, snake case naming conventions, and proper schema organization
 - **AddObservability()**: Registers OpenTelemetry for distributed tracing, metrics collection, and observability with OTLP export
-- **AddApplicationServices()**: Registers application-specific services including FluentValidation, dynamic sorting, and data shaping services
+- **AddApplicationServices()**: Registers application-specific services including FluentValidation, dynamic sorting, data shaping, and HATEOS link generation services
 
 This modular approach in `Program.cs` provides clear separation of concerns and makes the application startup configuration easy to understand and maintain.
 
@@ -135,6 +138,23 @@ The project includes a flexible data shaping system for field selection in API r
   - Automatic validation of field parameter values
 - **Usage**: Field parameters use format: `field1,field2,field3` (comma-separated field names)
 - **Benefits**: Reduces bandwidth usage and allows clients to customize response payloads
+
+### HATEOS (Hypermedia as the Engine of Application State)
+The project implements HATEOS to provide hypermedia links that guide API consumers through available actions and navigation:
+- **LinkService**: Central service for generating hypermedia links using ASP.NET Core's `LinkGenerator`
+- **LinkDto**: Standard representation of hypermedia links containing:
+  - `Href`: The URL for the linked resource or action
+  - `Rel`: The relationship type (e.g., "self", "next-page", "update", "delete")
+  - `Method`: HTTP method for the linked action (GET, POST, PUT, PATCH, DELETE)
+- **ILinksResponse**: Interface implemented by DTOs that include hypermedia links
+- **Features:**
+  - Automatic URL generation based on route configuration
+  - Support for collection navigation (self, next-page, previous-page)
+  - Resource action links (create, update, partial-update, delete)
+  - Cross-resource relationship links (e.g., upsert-tags for habits)
+  - Consistent link structure across all API responses
+- **Implementation**: Links are automatically included in `HabitDto`, `PaginationResult<T>`, and shaped responses
+- **Benefits**: Enables discoverable APIs, reduces client coupling, and provides clear navigation paths
 
 ### FluentValidation Framework
 The project implements comprehensive input validation using FluentValidation:
@@ -242,6 +262,7 @@ Junction entity establishing many-to-many relationships between habits and tags:
 - **Offset-Based Pagination**: Generic pagination system with metadata and configurable page sizes
 - **Comprehensive Validation**: FluentValidation-based input validation with business rule enforcement
 - **Structured Exception Handling**: Middleware-based validation error handling with problem details format
+- **HATEOS Implementation**: Hypermedia-driven API design with automatic link generation for navigation and actions
 
 ## Container Deployment
 
@@ -336,6 +357,7 @@ The API provides full CRUD operations for habit management:
   - `totalPages`: Total number of pages available
   - `hasPreviousPage`: Boolean indicating if there's a previous page
   - `hasNextPage`: Boolean indicating if there's a next page
+  - `links`: Array of hypermedia links for navigation (self, next-page, previous-page, create)
 - Returns `400 Bad Request` if invalid sort or field parameters are provided
 
 #### Get Single Habit
@@ -343,7 +365,7 @@ The API provides full CRUD operations for habit management:
 - Retrieves a specific habit by its ID including associated tags
 - **Query Parameters:**
   - `fields` (string): Optional comma-separated list of fields to include in response (e.g., `id,name,status`)
-- **Response**: `ExpandoObject` containing habit data (shaped based on `fields` parameter) or 404 if not found
+- **Response**: `ExpandoObject` containing habit data (shaped based on `fields` parameter) with hypermedia links, or 404 if not found
 - **Parameter**: `id` (string) - The habit identifier
 - Returns `400 Bad Request` if invalid field parameters are provided
 
@@ -351,7 +373,7 @@ The API provides full CRUD operations for habit management:
 - **POST** `/habits`
 - Creates a new habit with comprehensive validation
 - Request Body: `CreateHabitDto`
-- Response: `HabitDto` of the created habit with `201 Created` status
+- Response: `HabitDto` of the created habit with hypermedia links and `201 Created` status
 - Returns `Location` header pointing to the created resource
 - **Validation Rules:**
   - `Name`: Required, 3-100 characters
@@ -575,7 +597,34 @@ POST /habits
   "createdAtUtc": "2024-11-25T12:00:00Z",
   "updatedAtUtc": null,
   "lastCompletedAtUtc": null,
-  "tags": ["Fitness", "Health", "Morning Routine"]
+  "tags": ["Fitness", "Health", "Morning Routine"],
+  "links": [
+    {
+      "href": "https://localhost:9001/habits/h_01JDQM7Z8K2X3Y4W5V6U7T8S9R",
+      "rel": "self",
+      "method": "GET"
+    },
+    {
+      "href": "https://localhost:9001/habits/h_01JDQM7Z8K2X3Y4W5V6U7T8S9R",
+      "rel": "update",
+      "method": "PUT"
+    },
+    {
+      "href": "https://localhost:9001/habits/h_01JDQM7Z8K2X3Y4W5V6U7T8S9R",
+      "rel": "partial-update",
+      "method": "PATCH"
+    },
+    {
+      "href": "https://localhost:9001/habits/h_01JDQM7Z8K2X3Y4W5V6U7T8S9R",
+      "rel": "delete",
+      "method": "DELETE"
+    },
+    {
+      "href": "https://localhost:9001/habits/h_01JDQM7Z8K2X3Y4W5V6U7T8S9R/tags",
+      "rel": "upsert-tags",
+      "method": "PUT"
+    }
+  ]
 }
 ```
 
@@ -637,7 +686,24 @@ POST /habits
   "totalCount": 25,
   "totalPages": 3,
   "hasPreviousPage": false,
-  "hasNextPage": true
+  "hasNextPage": true,
+  "links": [
+    {
+      "href": "https://localhost:9001/habits?page=1&pageSize=10",
+      "rel": "self",
+      "method": "GET"
+    },
+    {
+      "href": "https://localhost:9001/habits",
+      "rel": "create",
+      "method": "POST"
+    },
+    {
+      "href": "https://localhost:9001/habits?page=2&pageSize=10",
+      "rel": "next-page",
+      "method": "GET"
+    }
+  ]
 }
 ```
 
@@ -661,7 +727,24 @@ POST /habits
   "totalCount": 25,
   "totalPages": 3,
   "hasPreviousPage": false,
-  "hasNextPage": true
+  "hasNextPage": true,
+  "links": [
+    {
+      "href": "https://localhost:9001/habits?page=1&pageSize=10&fields=id,name,status",
+      "rel": "self",
+      "method": "GET"
+    },
+    {
+      "href": "https://localhost:9001/habits",
+      "rel": "create",
+      "method": "POST"
+    },
+    {
+      "href": "https://localhost:9001/habits?page=2&pageSize=10&fields=id,name,status",
+      "rel": "next-page",
+      "method": "GET"
+    }
+  ]
 }
 ```
 
