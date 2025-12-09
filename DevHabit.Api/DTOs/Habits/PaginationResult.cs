@@ -2,12 +2,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DevHabit.Api.DTOs.Common;
 
-public sealed record PaginationResult<T> : ICollectionResponse<T>
+public sealed record PaginationResult<T> : ICollectionResponse<T>, ILinksResponse
 {
     public List<T> Items { get; init; }
     public int Page { get; init; }
     public int PageSize { get; init; }
     public int TotalCount { get; init; }
+    public List<LinkDto> Links { get; set; }
     public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
     public bool hasPreviousPage => Page > 1;
     public bool hasNextPage => Page < TotalPages;
@@ -23,7 +24,7 @@ public sealed record PaginationResult<T> : ICollectionResponse<T>
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
-            
+
         return new PaginationResult<T>
         {
             Items = items,
