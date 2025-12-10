@@ -63,20 +63,24 @@ public class HabitsController(ApplicationDbContext dbContext, LinkService linkSe
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .ToListAsync();
+        bool includeLinks = query.Accept == CustomMediaTypeNames.Application.HateoasJson;
 
         var paginationResult = new PaginationResult<ExpandoObject>
         {
             Items = dataShapingService.ShapeCollectionData(
                 habits,
                 query.Fields,
-                h => CreateLinksForHabit(h.Id, query.Fields)
+                includeLinks ? h => CreateLinksForHabit(h.Id, query.Fields) : null
             ),
             Page = query.Page,
             PageSize = query.PageSize,
             TotalCount = totalCount
         };
 
-        paginationResult.Links = CreateLinksForHabits(query, paginationResult.hasNextPage, paginationResult.hasPreviousPage);
+        if (includeLinks)
+        {
+            paginationResult.Links = CreateLinksForHabits(query, paginationResult.hasNextPage, paginationResult.hasPreviousPage);
+        }
 
         return Ok(paginationResult);
     }
@@ -85,6 +89,8 @@ public class HabitsController(ApplicationDbContext dbContext, LinkService linkSe
     public async Task<ActionResult<HabitWithTagsDto>> GetHabit(
         string id,
         string? fields,
+        [FromHeader(Name = "Accept")]
+        string? accept,
         DataShapingService dataShapingService)
     {
         if (!dataShapingService.Validate<HabitWithTagsDto>(fields))
@@ -107,9 +113,11 @@ public class HabitsController(ApplicationDbContext dbContext, LinkService linkSe
 
         ExpandoObject shapedHabitDto = dataShapingService.ShapeData(habit, fields);
 
-        List<LinkDto> links = CreateLinksForHabit(id, fields);
-
-        shapedHabitDto.TryAdd("links", links);
+        if (accept == CustomMediaTypeNames.Application.HateoasJson)
+        {
+            List<LinkDto> links = CreateLinksForHabit(id, fields);
+            shapedHabitDto.TryAdd("links", links);
+        }
 
         return Ok(shapedHabitDto);
     }
