@@ -86,6 +86,7 @@ The project enforces strict code quality standards:
   - **Services/Sorting/**: Dynamic sorting infrastructure with type-safe field mapping
   - **DataShapingService**: Field selection service for response customization
   - **LinkService**: HATEOS hypermedia link generation service for API navigation
+  - **CustomMediaTypeNames**: Constants for custom media types including HATEOS content negotiation
 - **Middleware/**: Custom middleware components
   - **ValidationExceptionHandler**: FluentValidation exception handling
   - **GlobalExceptionHandler**: General exception handling middleware
@@ -147,14 +148,19 @@ The project implements HATEOS to provide hypermedia links that guide API consume
   - `Rel`: The relationship type (e.g., "self", "next-page", "update", "delete")
   - `Method`: HTTP method for the linked action (GET, POST, PUT, PATCH, DELETE)
 - **ILinksResponse**: Interface implemented by DTOs that include hypermedia links
+- **CustomMediaTypeNames**: Defines custom media types for API responses:
+  - `Application.HateoasJson`: `"application/vnd.dev-habit.hateoas+json"` - Custom media type for HATEOS-enabled responses
 - **Features:**
   - Automatic URL generation based on route configuration
   - Support for collection navigation (self, next-page, previous-page)
   - Resource action links (create, update, partial-update, delete)
   - Cross-resource relationship links (e.g., upsert-tags for habits)
   - Consistent link structure across all API responses
-- **Implementation**: Links are automatically included in `HabitDto`, `PaginationResult<T>`, and shaped responses
-- **Benefits**: Enables discoverable APIs, reduces client coupling, and provides clear navigation paths
+  - **Content Negotiation**: HATEOS links are conditionally included based on the `Accept` header
+    - Links are included when `Accept: application/vnd.dev-habit.hateoas+json` header is present
+    - Standard responses without links when using default `Accept: application/json`
+- **Implementation**: Links are conditionally included in `HabitDto`, `PaginationResult<T>`, and shaped responses based on Accept header
+- **Benefits**: Enables discoverable APIs, reduces client coupling, provides clear navigation paths, and allows clients to control response verbosity
 
 ### FluentValidation Framework
 The project implements comprehensive input validation using FluentValidation:
@@ -344,6 +350,10 @@ The API provides full CRUD operations for habit management:
   - `fields` (string): Comma-separated list of fields to include in response (e.g., `id,name,status`)
   - `page` (int): Page number for pagination (default: 1)
   - `pageSize` (int): Number of items per page (default: 10)
+- **Headers:**
+  - `Accept` (string): Content type preference
+    - `application/json` (default): Standard response without HATEOS links
+    - `application/vnd.dev-habit.hateoas+json`: Response includes HATEOS hypermedia links
 - **Supported Sort Fields:**
   - `name`, `description`, `type`, `status`, `endDate`
   - `frequency.type`, `frequency.timesPerPeriod`
@@ -357,7 +367,7 @@ The API provides full CRUD operations for habit management:
   - `totalPages`: Total number of pages available
   - `hasPreviousPage`: Boolean indicating if there's a previous page
   - `hasNextPage`: Boolean indicating if there's a next page
-  - `links`: Array of hypermedia links for navigation (self, next-page, previous-page, create)
+  - `links`: Array of hypermedia links for navigation (self, next-page, previous-page, create) - **only included when Accept header is `application/vnd.dev-habit.hateoas+json`**
 - Returns `400 Bad Request` if invalid sort or field parameters are provided
 
 #### Get Single Habit
@@ -365,7 +375,11 @@ The API provides full CRUD operations for habit management:
 - Retrieves a specific habit by its ID including associated tags
 - **Query Parameters:**
   - `fields` (string): Optional comma-separated list of fields to include in response (e.g., `id,name,status`)
-- **Response**: `ExpandoObject` containing habit data (shaped based on `fields` parameter) with hypermedia links, or 404 if not found
+- **Headers:**
+  - `Accept` (string): Content type preference
+    - `application/json` (default): Standard response without HATEOS links
+    - `application/vnd.dev-habit.hateoas+json`: Response includes HATEOS hypermedia links
+- **Response**: `ExpandoObject` containing habit data (shaped based on `fields` parameter), or 404 if not found. HATEOS links are included only when Accept header is `application/vnd.dev-habit.hateoas+json`
 - **Parameter**: `id` (string) - The habit identifier
 - Returns `400 Bad Request` if invalid field parameters are provided
 
@@ -510,6 +524,22 @@ GET /habits/{id}?fields=name,description,type
 
 ```http
 GET /habits?q=exercise&fields=id,name,target&page=1&pageSize=5
+```
+
+##### HATEOS Content Negotiation Examples
+```http
+GET /habits
+Accept: application/vnd.dev-habit.hateoas+json
+```
+
+```http
+GET /habits/{id}
+Accept: application/vnd.dev-habit.hateoas+json
+```
+
+```http
+GET /habits?q=exercise&fields=id,name,status&page=1&pageSize=5
+Accept: application/vnd.dev-habit.hateoas+json
 ```
 
 #### Validation Error Example
