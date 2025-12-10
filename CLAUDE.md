@@ -51,10 +51,12 @@ The project enforces strict code quality standards:
   - **HabitsController**: Complete CRUD operations for habit management including tagging support
   - **TagsController**: Complete CRUD operations for tag management
   - **HabitTagsController**: Association management between habits and tags
+  - **UsersController**: User retrieval operations
 - **Entities/**: Domain entities including complex value objects
   - **Habit**: Core domain entity with complex value objects (Frequency, Target, Milestone)
   - **Tag**: Tag entity for categorizing habits (Id, Name, Description, timestamps)
   - **HabitTag**: Junction entity for many-to-many habit-tag relationships
+  - **User**: User entity for managing user accounts (Id, Email, Name, IdentityId, timestamps)
 - **DTOs/**: Data Transfer Objects organized by feature
   - **DTOs/Common/**:
     - **PaginationResult<T>**: Generic pagination wrapper with metadata (page, pageSize, totalCount, etc.) and HATEOS links support
@@ -78,8 +80,11 @@ The project enforces strict code quality standards:
     - **TagQueries**: LINQ expression projections for tag queries
   - **DTOs/HabitTags/**:
     - **UpsertHabitTagsDto**: Input model for associating tags with habits
+  - **DTOs/Users/**:
+    - **UserDto**: Read model for user data
+    - **UserQueries**: LINQ expression projections for user queries
 - **Database/**: Entity Framework Core configuration
-  - **ApplicationDbContext**: Main database context with Habits, Tags, and HabitTags DbSets
+  - **ApplicationDbContext**: Main database context with Habits, Tags, HabitTags, and Users DbSets
   - **Configurations/**: Entity configurations using Fluent API
   - **Migrations/**: EF Core migration files
 - **Services/**: Application services and infrastructure
@@ -256,6 +261,15 @@ Junction entity establishing many-to-many relationships between habits and tags:
 - **Composite Primary Key**: (HabitId, TagId)
 - **Cascade Delete**: Automatically removes associations when parent entities are deleted
 
+### User Entity
+Domain entity for managing user accounts and identity integration:
+- **Id**: Unique identifier using standard string format (max 500 characters)
+- **Email**: Required user email address (max 300 characters, unique constraint)
+- **Name**: Required user display name (max 100 characters)
+- **IdentityId**: External identity provider identifier (max 500 characters, unique constraint)
+- **CreatedAtUtc**: Timestamp of user account creation
+- **UpdatedAtUtc**: Last modification timestamp
+
 ### Data Architecture Patterns
 - **Domain-Driven Design**: Clear separation between entities and DTOs
 - **Value Objects**: Frequency, Target, and Milestone as owned entities
@@ -314,6 +328,7 @@ For HTTPS support in containers:
      - `20251126222141_UpdateHabitModel` - Column rename: `frequency_time_per_period` → `frequency_times_per_period`
      - `20251203011050_Add_Tags` - Tags table creation with unique name constraint
      - `20251203165332_Add_HabitTags` - Junction table for many-to-many habit-tag relationships
+     - `20251210201633_Add_Users` - Users table creation with unique email and identity constraints
 3. **Configuration**: Update appsettings files for new configuration requirements
 4. **Dependencies**: Add new PackageReference entries and update Directory.Packages.props
 
@@ -460,6 +475,15 @@ Complete CRUD operations for tag management:
 - Response: `204 No Content` on success, `404 Not Found` if tag doesn't exist
 - Parameter: `id` (string) - The tag identifier
 - **Note**: Cascade deletion automatically removes all HabitTag associations
+
+### Users API
+Basic operations for user management and identity integration:
+
+#### Get Single User
+- **GET** `/users/{id}`
+- Retrieves a specific user by their ID
+- Response: `UserDto` object or 404 if not found
+- Parameter: `id` (string) - The user identifier
 
 ### Habit-Tag Association API
 Manages the many-to-many relationships between habits and tags:
@@ -866,6 +890,22 @@ DELETE /habits/h_01JDQM7Z8K2X3Y4W5V6U7T8S9R/tags/t_01JDQM8A9L3N4P5Q6R7S8T9U0V
 ```
 
 **Response**: `204 No Content`
+
+#### Getting a User by ID
+```json
+GET /users/u_01JDQM9D2O6R7S8T9U0V1W2X3Y
+```
+
+**Response**: `200 OK`
+```json
+{
+  "id": "u_01JDQM9D2O6R7S8T9U0V1W2X3Y",
+  "email": "john.doe@example.com",
+  "name": "John Doe",
+  "createdAtUtc": "2024-12-10T12:00:00Z",
+  "updatedAtUtc": "2024-12-10T14:30:00Z"
+}
+```
 
 ### Base URLs
 
