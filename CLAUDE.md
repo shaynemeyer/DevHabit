@@ -84,9 +84,11 @@ The project enforces strict code quality standards:
     - **UserDto**: Read model for user data
     - **UserQueries**: LINQ expression projections for user queries
 - **Database/**: Entity Framework Core configuration
-  - **ApplicationDbContext**: Main database context with Habits, Tags, HabitTags, and Users DbSets
+  - **ApplicationDbContext**: Main database context with Habits, Tags, HabitTags, and Users DbSets (uses `dev_habit` schema)
+  - **ApplicationIdentityDbContext**: ASP.NET Core Identity database context for authentication and authorization (uses `identity` schema)
+  - **Schemas**: Database schema constants for organizing tables (`dev_habit` for application data, `identity` for authentication)
   - **Configurations/**: Entity configurations using Fluent API
-  - **Migrations/**: EF Core migration files
+  - **Migrations/**: EF Core migration files for both application and identity schemas
 - **Services/**: Application services and infrastructure
   - **Services/Sorting/**: Dynamic sorting infrastructure with type-safe field mapping
   - **DataShapingService**: Field selection service for response customization
@@ -112,9 +114,10 @@ The project uses ASP.NET Core's built-in dependency injection container with a c
 
 - **AddControllers()**: Configures MVC controllers with JSON/XML serialization, OpenAPI support, and proper content negotiation
 - **AddErrorHandling()**: Sets up problem details framework and exception handlers for validation and global error handling
-- **AddDatabase()**: Configures Entity Framework Core with PostgreSQL, snake case naming conventions, and proper schema organization
+- **AddDatabase()**: Configures Entity Framework Core with PostgreSQL, snake case naming conventions, and dual-schema organization (application and identity)
 - **AddObservability()**: Registers OpenTelemetry for distributed tracing, metrics collection, and observability with OTLP export
 - **AddApplicationServices()**: Registers application-specific services including FluentValidation, dynamic sorting, data shaping, and HATEOS link generation services
+- **AddAuthenticationServices()**: Configures ASP.NET Core Identity with Entity Framework stores for user authentication and authorization
 
 This modular approach in `Program.cs` provides clear separation of concerns and makes the application startup configuration easy to understand and maintain.
 
@@ -210,6 +213,7 @@ All package versions are managed centrally through Directory.Packages.props. Whe
 - **System.Linq.Dynamic.Core** (v1.7.1): Dynamic LINQ expression parsing for sorting functionality
 - **Microsoft.AspNetCore.JsonPatch** (v9.0.11): JSON Patch support for partial updates
 - **Microsoft.AspNetCore.Mvc.NewtonsoftJson** (v9.0.11): Newtonsoft.Json integration for JSON Patch
+- **Microsoft.AspNetCore.Identity.EntityFrameworkCore** (v9.0.11): ASP.NET Core Identity with Entity Framework integration
 - **EFCore.NamingConventions** (v9.0.0): Snake case naming convention for PostgreSQL
 - **Npgsql.EntityFrameworkCore.PostgreSQL** (v9.0.4): PostgreSQL database provider
 - **OpenTelemetry packages**: Comprehensive observability and monitoring
@@ -219,6 +223,24 @@ The project uses comprehensive code analysis:
 - All analysis modes enabled
 - Code style enforcement during build
 - SonarAnalyzer for additional quality checks
+
+### ASP.NET Core Identity Infrastructure
+The project implements ASP.NET Core Identity for user authentication and authorization:
+- **ApplicationIdentityDbContext**: Separate database context for Identity-related tables using Entity Framework Core
+- **Database Schema Separation**: Identity tables are isolated in the `identity` schema, while application data resides in the `dev_habit` schema
+- **Standard Identity Tables**: Complete ASP.NET Core Identity table structure including:
+  - `asp_net_users`: Core user accounts with username, email, password hash, and security features
+  - `asp_net_roles`: Role definitions for authorization
+  - `asp_net_user_roles`: Many-to-many mapping between users and roles
+  - `asp_net_user_claims`: User-specific claims for fine-grained authorization
+  - `asp_net_role_claims`: Role-based claims for group permissions
+  - `asp_net_user_logins`: External login provider mappings (OAuth, social logins)
+  - `asp_net_user_tokens`: Security tokens for password resets, email confirmations, etc.
+- **Snake Case Naming**: All Identity tables follow PostgreSQL conventions with snake_case column names
+- **Dual Migration System**: Separate migration histories for application schema and Identity schema
+- **Service Registration**: Identity services configured through `AddAuthenticationServices()` extension method
+- **Entity Framework Integration**: Uses `IdentityDbContext` with Entity Framework stores for data persistence
+- **Future Integration**: Foundation for connecting Identity users with application-specific User entities via IdentityId relationships
 
 ## Domain Model
 
@@ -306,8 +328,9 @@ For HTTPS support in containers:
 4. See `HTTPS-SETUP.md` for detailed configuration and troubleshooting
 
 ### Database Connection
-- **Development**: Uses localhost connection (`appsettings.Development.json`)
-- **Docker**: Uses container networking to `devhabit.postgres` (`appsettings.Docker.json`)
+- **Development**: Uses localhost connection (`appsettings.Development.json`) - both ApplicationDbContext and ApplicationIdentityDbContext use the same connection string
+- **Docker**: Uses container networking to `devhabit.postgres` (`appsettings.Docker.json`) - shared connection with schema-based separation
+- **Schema Organization**: Single database with multiple schemas (`dev_habit` for application data, `identity` for authentication data)
 
 ## Development Workflow
 
@@ -320,15 +343,24 @@ For HTTPS support in containers:
    - **Mappings**: Create extension methods for entity-DTO conversions
    - **Queries**: Use expression projections for efficient database queries
 2. **Database Changes**: Use EF Core migrations for schema modifications
-   - `dotnet ef migrations add {Name}` - Create a new migration
-   - `dotnet ef database update` - Apply pending migrations to database
-   - `dotnet ef migrations list` - View migration history and status
+   - **Application Schema Commands**:
+     - `dotnet ef migrations add {Name} --context ApplicationDbContext` - Create application migration
+     - `dotnet ef database update --context ApplicationDbContext` - Apply application migrations
+     - `dotnet ef migrations list --context ApplicationDbContext` - View application migration history
+   - **Identity Schema Commands**:
+     - `dotnet ef migrations add {Name} --context ApplicationIdentityDbContext` - Create Identity migration
+     - `dotnet ef database update --context ApplicationIdentityDbContext` - Apply Identity migrations
+     - `dotnet ef migrations list --context ApplicationIdentityDbContext` - View Identity migration history
+   - **Combined Operations**: The `ApplyMigrationsAsync()` extension method automatically applies both application and Identity migrations during startup
    - **Current Migration History:**
-     - `20251121221333_Add_Habits` - Initial Habits table creation with full schema
-     - `20251126222141_UpdateHabitModel` - Column rename: `frequency_time_per_period` → `frequency_times_per_period`
-     - `20251203011050_Add_Tags` - Tags table creation with unique name constraint
-     - `20251203165332_Add_HabitTags` - Junction table for many-to-many habit-tag relationships
-     - `20251210201633_Add_Users` - Users table creation with unique email and identity constraints
+     - **Application Schema (`dev_habit`):**
+       - `20251121221333_Add_Habits` - Initial Habits table creation with full schema
+       - `20251126222141_UpdateHabitModel` - Column rename: `frequency_time_per_period` → `frequency_times_per_period`
+       - `20251203011050_Add_Tags` - Tags table creation with unique name constraint
+       - `20251203165332_Add_HabitTags` - Junction table for many-to-many habit-tag relationships
+       - `20251210201633_Add_Users` - Users table creation with unique email and identity constraints
+     - **Identity Schema (`identity`):**
+       - `20251210225913_Add_Identity` - ASP.NET Core Identity tables creation (users, roles, claims, tokens)
 3. **Configuration**: Update appsettings files for new configuration requirements
 4. **Dependencies**: Add new PackageReference entries and update Directory.Packages.props
 
