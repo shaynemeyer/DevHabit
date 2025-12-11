@@ -13,11 +13,11 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(h => h.Id).HasMaxLength(500);
 
         builder.Property(u => u.Email).HasMaxLength(300);
-        builder.Property(u => u.IndentityId).HasMaxLength(500);
+        builder.Property(u => u.IdentityId).HasMaxLength(500);
 
         builder.Property(u => u.Name).HasMaxLength(100);
 
         builder.HasIndex(user => user.Email).IsUnique();
-        builder.HasIndex(user => user.IndentityId).IsUnique();
+        builder.HasIndex(user => user.IdentityId).IsUnique();
     }
 }

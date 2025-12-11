@@ -9,8 +9,8 @@ public sealed class User
     public DateTime UpdatedAtUtc { get; set; }
 
     ///<summary>
-    /// We'll use this to store the IndentityId from the Identity Provider.
+    /// We'll use this to store the IdentityId from the Identity Provider.
     /// This could be any identity provider like Azure AD, Okta, Auth0, etc.
-    /// </summar>
-    public string IndentityId { get; set; }
+    /// </summary>
+    public string IdentityId { get; set; }
 }
