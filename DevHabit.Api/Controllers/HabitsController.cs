@@ -12,6 +12,7 @@ using DevHabit.Api.Services;
 using DevHabit.Api.Services.Sorting;
 using FluentValidation;
 using FluentValidation.Results;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
@@ -21,6 +22,7 @@ using OpenTelemetry.Trace;
 namespace DevHabit.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("habits")]
 [ApiVersion(1.0)]
 [Produces(
