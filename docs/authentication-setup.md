@@ -180,7 +180,11 @@ public async Task<IActionResult> Register(RegisterUserDto registerUserDto)
     // 4. Commit transaction
     await transaction.CommitAsync();
 
-    return Ok(user.Id);
+    // 5. Generate JWT tokens for immediate login
+    var tokenRequest = new TokenRequest(identityUser.Id, identityUser.Email);
+    AccessTokensDto accessTokens = tokenProvider.Create(tokenRequest);
+
+    return Ok(accessTokens);
 }
 ```
 
@@ -301,24 +305,221 @@ public async Task<IActionResult> UpdateHabit(string id, UpdateHabitDto dto)
 }
 ```
 
-## Authentication Extensions (Future)
+## JWT Token Authentication
 
-### JWT Token Authentication
-For API-first scenarios or mobile apps:
+DevHabit implements JWT (JSON Web Token) based authentication for API access, providing stateless authentication suitable for mobile apps and SPA frontends.
+
+### JWT Service Configuration
+
+JWT authentication is configured in `DependencyInjection.cs`:
+
 ```csharp
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
+public static WebApplicationBuilder AddAuthenticationServices(this WebApplicationBuilder builder)
+{
+    builder.Services
+        .AddIdentity<IdentityUser, IdentityRole>()
+        .AddEntityFrameworkStores<ApplicationIdentityDbContext>();
+
+    // Configure JWT settings from appsettings.json
+    builder.Services.Configure<JwtAuthOptions>(builder.Configuration.GetSection("Jwt"));
+
+    JwtAuthOptions jwtAuthOptions = builder.Configuration.GetSection("Jwt").Get<JwtAuthOptions>()!;
+
+    // Configure JWT Bearer authentication
+    builder.Services
+        .AddAuthentication(options =>
         {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            // Configure JWT parameters
-        };
-    });
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        })
+        .AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidIssuer = jwtAuthOptions.Issuer,
+                ValidAudience = jwtAuthOptions.Audience,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtAuthOptions.Key))
+            };
+        });
+
+    builder.Services.AddAuthorization();
+
+    // Register JWT token provider service
+    builder.Services.AddTransient<TokenProvider>();
+
+    return builder;
+}
 ```
+
+### JWT Configuration Options
+
+JWT settings are defined in the `JwtAuthOptions` class:
+
+```csharp
+public sealed class JwtAuthOptions
+{
+    public string Issuer { get; init; }
+    public string Audience { get; init; }
+    public string Key { get; init; }
+    public int ExpirationInMinutes { get; init; }
+    public int RefreshTokenExpirationDays { get; init; }
+}
+```
+
+These settings should be configured in `appsettings.json`:
+
+```json
+{
+  "Jwt": {
+    "Issuer": "dev-habit-api",
+    "Audience": "dev-habit-client",
+    "Key": "your-super-secret-jwt-signing-key-here",
+    "ExpirationInMinutes": 60,
+    "RefreshTokenExpirationDays": 7
+  }
+}
+```
+
+**Security Note**: The JWT signing key should be a strong, randomly generated string and stored securely (environment variables in production).
+
+### Token Provider Service
+
+The `TokenProvider` service handles JWT token generation:
+
+```csharp
+public sealed class TokenProvider(IOptions<JwtAuthOptions> options)
+{
+    public AccessTokensDto Create(TokenRequest tokenRequest)
+    {
+        return new AccessTokensDto(GenerateAccessToken(tokenRequest), GenerateRefreshToken());
+    }
+
+    private string GenerateAccessToken(TokenRequest tokenRequest)
+    {
+        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtAuthOptions.Key));
+        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+
+        List<Claim> claims = [
+            new(JwtRegisteredClaimNames.Sub, tokenRequest.UserId),
+            new(JwtRegisteredClaimNames.Email, tokenRequest.Email)
+        ];
+
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(claims),
+            Expires = DateTime.UtcNow.AddMinutes(_jwtAuthOptions.ExpirationInMinutes),
+            SigningCredentials = credentials,
+            Issuer = _jwtAuthOptions.Issuer,
+            Audience = _jwtAuthOptions.Audience
+        };
+
+        var handler = new JsonWebTokenHandler();
+        return handler.CreateToken(tokenDescriptor);
+    }
+}
+```
+
+### Authentication Endpoints
+
+#### User Login
+The `AuthController` provides a login endpoint that returns JWT tokens:
+
+```csharp
+[HttpPost("login")]
+public async Task<ActionResult<AccessTokensDto>> Login(LoginUserDto loginUserDto)
+{
+    IdentityUser? identityUser = await userManager.FindByEmailAsync(loginUserDto.Email);
+
+    if (identityUser is null || !await userManager.CheckPasswordAsync(identityUser, loginUserDto.Password))
+    {
+        return Unauthorized();
+    }
+
+    var tokenRequest = new TokenRequest(identityUser.Id, identityUser.Email!);
+    AccessTokensDto accessTokens = tokenProvider.Create(tokenRequest);
+
+    return Ok(accessTokens);
+}
+```
+
+#### Updated User Registration
+The registration endpoint now returns JWT tokens upon successful registration:
+
+```csharp
+[HttpPost("register")]
+public async Task<ActionResult<AccessTokensDto>> Register(RegisterUserDto registerUserDto)
+{
+    // ... Identity and Application user creation logic ...
+
+    // Generate and return JWT tokens
+    var tokenRequest = new TokenRequest(identityUser.Id, identityUser.Email);
+    AccessTokensDto accessTokens = tokenProvider.Create(tokenRequest);
+
+    return Ok(accessTokens);
+}
+```
+
+### JWT Token Structure
+
+#### Access Token Claims
+Generated JWT access tokens include:
+- **sub** (Subject): The Identity user ID
+- **email**: User's email address
+- **iss** (Issuer): Configured issuer value
+- **aud** (Audience): Configured audience value
+- **exp** (Expires): Token expiration timestamp
+- **iat** (Issued At): Token generation timestamp
+
+#### Token Response Format
+Authentication endpoints return tokens in the `AccessTokensDto` format:
+
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": ""
+}
+```
+
+**Note**: Refresh token functionality is currently a placeholder and returns an empty string.
+
+### Client Authentication
+
+#### Making Authenticated Requests
+Clients should include the JWT access token in the Authorization header:
+
+```http
+GET /habits
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+#### Token Validation
+The JWT Bearer middleware automatically:
+- Validates the token signature using the configured signing key
+- Checks token expiration
+- Verifies issuer and audience claims
+- Populates the `HttpContext.User` with claims from the token
+
+### Protected Controllers
+
+Controllers requiring authentication use the `[Authorize]` attribute:
+
+```csharp
+[ApiController]
+[Route("habits")]
+[Authorize]  // Requires valid JWT token
+public sealed class HabitsController : ControllerBase
+{
+    [HttpGet]
+    public async Task<IActionResult> GetHabits()
+    {
+        // Access authenticated user via HttpContext.User
+        string userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        // ... implementation
+    }
+}
+```
+
+## Authentication Extensions (Future)
 
 ### External Login Providers
 Social login integration:

@@ -52,7 +52,7 @@ The project enforces strict code quality standards:
 
 ### Current Structure
 - **Controllers/**: API controllers for resource management
-  - **AuthController**: User registration and authentication endpoints
+  - **AuthController**: User registration and JWT-based authentication endpoints (register, login)
   - **HabitsController**: Complete CRUD operations for habit management including tagging support
   - **TagsController**: Complete CRUD operations for tag management
   - **HabitTagsController**: Association management between habits and tags
@@ -91,6 +91,9 @@ The project enforces strict code quality standards:
     - **UserMappings**: Extension methods for converting RegisterUserDto to User entities
   - **DTOs/Auth/**:
     - **RegisterUserDto**: Input model for user registration with email, name, password, and confirmation
+    - **LoginUserDto**: Input model for user authentication with email and password
+    - **AccessTokensDto**: Response model containing JWT access and refresh tokens
+    - **TokenRequest**: Internal model for JWT token generation requests
 - **Database/**: Entity Framework Core configuration
   - **ApplicationDbContext**: Main database context with Habits, Tags, HabitTags, and Users DbSets (uses `dev_habit` schema)
   - **ApplicationIdentityDbContext**: ASP.NET Core Identity database context for authentication and authorization (uses `identity` schema)
@@ -101,7 +104,10 @@ The project enforces strict code quality standards:
   - **Services/Sorting/**: Dynamic sorting infrastructure with type-safe field mapping
   - **DataShapingService**: Field selection service for response customization
   - **LinkService**: HATEOS hypermedia link generation service for API navigation
+  - **TokenProvider**: JWT token generation service for authentication
   - **CustomMediaTypeNames**: Constants for custom media types including HATEOS content negotiation
+- **Settings/**: Configuration classes for application settings
+  - **JwtAuthOptions**: JWT authentication configuration including issuer, audience, signing key, and token expiration settings
 - **Middleware/**: Custom middleware components
   - **ValidationExceptionHandler**: FluentValidation exception handling
   - **GlobalExceptionHandler**: General exception handling middleware
@@ -125,7 +131,7 @@ The project uses ASP.NET Core's built-in dependency injection container with a c
 - **AddDatabase()**: Configures Entity Framework Core with PostgreSQL, snake case naming conventions, and dual-schema organization (application and identity)
 - **AddObservability()**: Registers OpenTelemetry for distributed tracing, metrics collection, and observability with OTLP export
 - **AddApplicationServices()**: Registers application-specific services including FluentValidation, dynamic sorting, data shaping, and HATEOS link generation services
-- **AddAuthenticationServices()**: Configures ASP.NET Core Identity with Entity Framework stores for user authentication and authorization
+- **AddAuthenticationServices()**: Configures ASP.NET Core Identity with Entity Framework stores and JWT Bearer authentication for stateless API authentication
 
 This modular approach in `Program.cs` provides clear separation of concerns and makes the application startup configuration easy to understand and maintain.
 
@@ -222,6 +228,8 @@ All package versions are managed centrally through Directory.Packages.props. Whe
 - **Microsoft.AspNetCore.JsonPatch** (v9.0.11): JSON Patch support for partial updates
 - **Microsoft.AspNetCore.Mvc.NewtonsoftJson** (v9.0.11): Newtonsoft.Json integration for JSON Patch
 - **Microsoft.AspNetCore.Identity.EntityFrameworkCore** (v9.0.11): ASP.NET Core Identity with Entity Framework integration
+- **Microsoft.AspNetCore.Authentication.JwtBearer** (v9.0.11): JWT Bearer token authentication
+- **Microsoft.IdentityModel.JsonWebTokens** (v8.2.1): JWT token generation and validation
 - **EFCore.NamingConventions** (v9.0.0): Snake case naming convention for PostgreSQL
 - **Npgsql.EntityFrameworkCore.PostgreSQL** (v9.0.4): PostgreSQL database provider
 - **OpenTelemetry packages**: Comprehensive observability and monitoring
@@ -254,7 +262,11 @@ The project implements a fully functional ASP.NET Core Identity system for user 
   - **Order**: Middleware is correctly ordered after exception handling but before controller mapping
 - **Identity Integration**: Active integration between Identity users and application-specific User entities via `IdentityId` property
 - **Transactional User Creation**: User registration creates both Identity and application user records atomically using database transactions
-- **AuthController**: Fully functional authentication controller with user registration endpoint
+- **JWT Token Authentication**: Stateless authentication using JSON Web Tokens for API access
+  - **TokenProvider Service**: Generates signed JWT access tokens with user claims (subject, email)
+  - **JWT Bearer Middleware**: Validates incoming tokens and populates HttpContext.User
+  - **Configuration-Based Settings**: JWT issuer, audience, signing key, and expiration configurable via appsettings.json
+- **AuthController**: Fully functional authentication controller with user registration and login endpoints
 
 ## Domain Model
 

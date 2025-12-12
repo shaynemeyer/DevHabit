@@ -23,7 +23,7 @@ User registration and authentication endpoints for account management:
 - **POST** `/auth/register`
 - Creates a new user account with both Identity and application database entries
 - Request Body: `RegisterUserDto`
-- Response: Returns the new application user ID with `200 OK` status on successful registration
+- Response: Returns JWT access tokens with `200 OK` status on successful registration
 - **Validation Rules:**
   - `Email`: Required, valid email format, will be used as username in Identity system
   - `Name`: Required, user's display name (max 100 characters)
@@ -39,6 +39,24 @@ User registration and authentication endpoints for account management:
   - Validation errors include specific field-level error messages from ASP.NET Core Identity
 - **Integration**: Links Identity user with application User entity via `IdentityId` property
 - Returns `400 Bad Request` with detailed Identity validation errors if registration fails
+
+### Login User
+- **POST** `/auth/login`
+- Authenticates an existing user and returns JWT tokens for API access
+- Request Body: `LoginUserDto`
+- Response: Returns JWT access tokens with `200 OK` status on successful authentication
+- **Request Properties:**
+  - `Email`: Required, user's registered email address
+  - `Password`: Required, user's password
+- **Authentication Process:**
+  - Validates email and password against ASP.NET Core Identity
+  - Generates JWT access token with user claims (subject, email)
+  - Returns structured token response for client authentication
+- **Security Features:**
+  - Password verification using secure hash comparison
+  - Account lockout protection (inherited from Identity configuration)
+  - Token expiration based on configured JWT settings
+- Returns `401 Unauthorized` if email not found or password is incorrect
 
 ## Habits API
 The API provides full CRUD operations for habit management:
@@ -611,7 +629,50 @@ Content-Type: application/json
 
 **Response**: `200 OK`
 ```json
-u_019b0e9c-30bf-76c8-900c-802e2d3a818e
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmJlNTFmYy0xMDBjLTQ5NDAtYmY2NC1hYTk2ZTJmZmI1MTciLCJlbWFpbCI6Im5ld3VzZXJAZXhhbXBsZS5jb20iLCJpc3MiOiJkZXYtaGFiaXQtYXBpIiwiYXVkIjoiZGV2LWhhYml0LWNsaWVudCIsImV4cCI6MTczMzk5NjExNCwiaWF0IjoxNzMzOTkyNTE0fQ.K5xP2sY8JqN9LMwF3QRx7Tv4QnU8ZrW2Ht1Bc9VmXdE",
+  "refreshToken": ""
+}
+```
+
+### Logging In a User
+```json
+POST /auth/login
+Content-Type: application/json
+
+{
+  "email": "newuser@example.com",
+  "password": "SecurePassword123!"
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmJlNTFmYy0xMDBjLTQ5NDAtYmY2NC1hYTk2ZTJmZmI1MTciLCJlbWFpbCI6Im5ld3VzZXJAZXhhbXBsZS5jb20iLCJpc3MiOiJkZXYtaGFiaXQtYXBpIiwiYXVkIjoiZGV2LWhhYml0LWNsaWVudCIsImV4cCI6MTczMzk5NjExNCwiaWF0IjoxNzMzOTkyNTE0fQ.K5xP2sY8JqN9LMwF3QRx7Tv4QnU8ZrW2Ht1Bc9VmXdE",
+  "refreshToken": ""
+}
+```
+
+### Login with Invalid Credentials
+```json
+POST /auth/login
+Content-Type: application/json
+
+{
+  "email": "nonexistent@example.com",
+  "password": "WrongPassword"
+}
+```
+
+**Response**: `401 Unauthorized`
+
+### Using JWT Tokens for Authentication
+After successful login or registration, include the access token in subsequent API requests:
+
+```http
+GET /habits
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmJlNTFmYy0xMDBjLTQ5NDAtYmY2NC1hYTk2ZTJmZmI1MTciLCJlbWFpbCI6Im5ld3VzZXJAZXhhbXBsZS5jb20iLCJpc3MiOiJkZXYtaGFiaXQtYXBpIiwiYXVkIjoiZGV2LWhhYml0LWNsaWVudCIsImV4cCI6MTczMzk5NjExNCwiaWF0IjoxNzMzOTkyNTE0fQ.K5xP2sY8JqN9LMwF3QRx7Tv4QnU8ZrW2Ht1Bc9VmXdE
 ```
 
 ### Registration with Validation Errors
