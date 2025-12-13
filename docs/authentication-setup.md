@@ -62,6 +62,13 @@ app.MapControllers();
 
 The Identity system creates these tables in the `identity` schema:
 
+### refresh_tokens
+DevHabit-specific table for refresh token management:
+- **id**: Unique refresh token identifier (UUID v7)
+- **user_id**: Reference to asp_net_users.id
+- **token**: Base64-encoded secure random token
+- **expires_at_utc**: Token expiration timestamp
+
 #### asp_net_users
 Primary user authentication data:
 - **id**: Unique user identifier
@@ -384,7 +391,7 @@ These settings should be configured in `appsettings.json`:
 
 ### Token Provider Service
 
-The `TokenProvider` service handles JWT token generation:
+The `TokenProvider` service handles JWT access and refresh token generation:
 
 ```csharp
 public sealed class TokenProvider(IOptions<JwtAuthOptions> options)
@@ -416,13 +423,19 @@ public sealed class TokenProvider(IOptions<JwtAuthOptions> options)
         var handler = new JsonWebTokenHandler();
         return handler.CreateToken(tokenDescriptor);
     }
+
+    private static string GenerateRefreshToken()
+    {
+        byte[] randomBytes = RandomNumberGenerator.GetBytes(32);
+        return Convert.ToBase64String(randomBytes);
+    }
 }
 ```
 
 ### Authentication Endpoints
 
 #### User Login
-The `AuthController` provides a login endpoint that returns JWT tokens:
+The `AuthController` provides a login endpoint that returns JWT tokens and stores refresh tokens:
 
 ```csharp
 [HttpPost("login")]
@@ -438,12 +451,51 @@ public async Task<ActionResult<AccessTokensDto>> Login(LoginUserDto loginUserDto
     var tokenRequest = new TokenRequest(identityUser.Id, identityUser.Email!);
     AccessTokensDto accessTokens = tokenProvider.Create(tokenRequest);
 
+    // Store refresh token in database
+    var refreshToken = new RefreshToken
+    {
+        Id = Guid.CreateVersion7(),
+        UserId = identityUser.Id,
+        Token = accessTokens.RefreshToken,
+        ExpiresAtUtc = DateTime.UtcNow.AddDays(_jwtAuthOptions.RefreshTokenExpirationDays)
+    };
+    identityDbContext.RefreshTokens.Add(refreshToken);
+    await identityDbContext.SaveChangesAsync();
+
+    return Ok(accessTokens);
+}
+```
+
+#### Token Refresh
+The refresh endpoint allows clients to obtain new access tokens without re-authentication:
+
+```csharp
+[HttpPost("refresh")]
+public async Task<ActionResult<AccessTokensDto>> Refresh(RefreshTokenDto refreshTokenDto)
+{
+    RefreshToken? refreshToken = await identityDbContext.RefreshTokens
+        .Include(rt => rt.User)
+        .FirstOrDefaultAsync(rt => rt.Token == refreshTokenDto.RefreshToken);
+
+    if (refreshToken is null || refreshToken.ExpiresAtUtc < DateTime.UtcNow)
+    {
+        return Unauthorized();
+    }
+
+    var tokenRequest = new TokenRequest(refreshToken.User.Id, refreshToken.User.Email!);
+    AccessTokensDto accessTokens = tokenProvider.Create(tokenRequest);
+
+    // Rotate refresh token for security
+    refreshToken.Token = accessTokens.RefreshToken;
+    refreshToken.ExpiresAtUtc = DateTime.UtcNow.AddDays(_jwtAuthOptions.RefreshTokenExpirationDays);
+    await identityDbContext.SaveChangesAsync();
+
     return Ok(accessTokens);
 }
 ```
 
 #### Updated User Registration
-The registration endpoint now returns JWT tokens upon successful registration:
+The registration endpoint now returns JWT tokens and stores refresh tokens upon successful registration:
 
 ```csharp
 [HttpPost("register")]
@@ -451,9 +503,22 @@ public async Task<ActionResult<AccessTokensDto>> Register(RegisterUserDto regist
 {
     // ... Identity and Application user creation logic ...
 
-    // Generate and return JWT tokens
-    var tokenRequest = new TokenRequest(identityUser.Id, identityUser.Email);
+    // Generate JWT tokens
+    var tokenRequest = new TokenRequest(identityUser.Id, identityUser.Email!);
     AccessTokensDto accessTokens = tokenProvider.Create(tokenRequest);
+
+    // Store refresh token in database within the same transaction
+    var refreshToken = new RefreshToken
+    {
+        Id = Guid.CreateVersion7(),
+        UserId = identityUser.Id,
+        Token = accessTokens.RefreshToken,
+        ExpiresAtUtc = DateTime.UtcNow.AddDays(_jwtAuthOptions.RefreshTokenExpirationDays)
+    };
+    identityDbContext.RefreshTokens.Add(refreshToken);
+    await identityDbContext.SaveChangesAsync();
+
+    await transaction.CommitAsync();
 
     return Ok(accessTokens);
 }
@@ -476,11 +541,16 @@ Authentication endpoints return tokens in the `AccessTokensDto` format:
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refreshToken": ""
+  "refreshToken": "xYz9K3mP2qR4sT6uV8wX0yA1bC2dE3fG4hI5jK6lM7nO8pQ9rS0tU1vW2xY3zA4B"
 }
 ```
 
-**Note**: Refresh token functionality is currently a placeholder and returns an empty string.
+#### Refresh Token Security Features
+- **Secure Generation**: Uses `RandomNumberGenerator.GetBytes(32)` for cryptographically secure tokens
+- **Token Rotation**: New refresh token issued on each refresh for enhanced security
+- **Expiration Management**: Configurable lifetime with automatic validation
+- **Database Storage**: Persistent storage in identity schema for revocation capabilities
+- **User Association**: Direct relationship with Identity users for user-specific token management
 
 ### Client Authentication
 
@@ -498,6 +568,56 @@ The JWT Bearer middleware automatically:
 - Checks token expiration
 - Verifies issuer and audience claims
 - Populates the `HttpContext.User` with claims from the token
+
+#### Token Refresh Workflow
+Clients should implement automatic token refresh to maintain authentication:
+
+1. **Store Both Tokens**: Save both access and refresh tokens securely
+2. **Monitor Token Expiration**: Check access token expiration before API calls
+3. **Refresh When Needed**: Use refresh token to get new access token when expired
+4. **Update Stored Tokens**: Replace both tokens with new ones from refresh response
+5. **Handle Refresh Failure**: Redirect to login if refresh token is expired or invalid
+
+```javascript
+// Example client-side token refresh logic
+async function makeAuthenticatedRequest(url, options = {}) {
+  let accessToken = getStoredAccessToken();
+
+  // Check if token is expired or about to expire
+  if (isTokenExpired(accessToken)) {
+    try {
+      const refreshToken = getStoredRefreshToken();
+      const refreshResponse = await fetch('/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken })
+      });
+
+      if (refreshResponse.ok) {
+        const tokens = await refreshResponse.json();
+        storeTokens(tokens.accessToken, tokens.refreshToken);
+        accessToken = tokens.accessToken;
+      } else {
+        // Refresh failed, redirect to login
+        redirectToLogin();
+        return;
+      }
+    } catch (error) {
+      redirectToLogin();
+      return;
+    }
+  }
+
+  // Make original request with valid access token
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': `Bearer ${accessToken}`
+    }
+  });
+}
+```
 
 ### Protected Controllers
 

@@ -52,7 +52,7 @@ The project enforces strict code quality standards:
 
 ### Current Structure
 - **Controllers/**: API controllers for resource management
-  - **AuthController**: User registration and JWT-based authentication endpoints (register, login)
+  - **AuthController**: User registration and JWT-based authentication endpoints (register, login, refresh)
   - **HabitsController**: Complete CRUD operations for habit management including tagging support
   - **TagsController**: Complete CRUD operations for tag management
   - **HabitTagsController**: Association management between habits and tags
@@ -62,6 +62,7 @@ The project enforces strict code quality standards:
   - **Tag**: Tag entity for categorizing habits (Id, Name, Description, timestamps)
   - **HabitTag**: Junction entity for many-to-many habit-tag relationships
   - **User**: User entity for managing user accounts (Id, Email, Name, IdentityId, timestamps)
+  - **RefreshToken**: Identity-specific entity for managing refresh tokens (Id, UserId, Token, ExpiresAtUtc, User navigation)
 - **DTOs/**: Data Transfer Objects organized by feature
   - **DTOs/Common/**:
     - **PaginationResult<T>**: Generic pagination wrapper with metadata (page, pageSize, totalCount, etc.) and HATEOS links support
@@ -92,11 +93,12 @@ The project enforces strict code quality standards:
   - **DTOs/Auth/**:
     - **RegisterUserDto**: Input model for user registration with email, name, password, and confirmation
     - **LoginUserDto**: Input model for user authentication with email and password
+    - **RefreshTokenDto**: Input model for token refresh containing refresh token string
     - **AccessTokensDto**: Response model containing JWT access and refresh tokens
     - **TokenRequest**: Internal model for JWT token generation requests
 - **Database/**: Entity Framework Core configuration
   - **ApplicationDbContext**: Main database context with Habits, Tags, HabitTags, and Users DbSets (uses `dev_habit` schema)
-  - **ApplicationIdentityDbContext**: ASP.NET Core Identity database context for authentication and authorization (uses `identity` schema)
+  - **ApplicationIdentityDbContext**: ASP.NET Core Identity database context for authentication and authorization with RefreshTokens DbSet (uses `identity` schema)
   - **Schemas**: Database schema constants for organizing tables (`dev_habit` for application data, `identity` for authentication)
   - **Configurations/**: Entity configurations using Fluent API
   - **Migrations/**: EF Core migration files for both application and identity schemas
@@ -104,10 +106,10 @@ The project enforces strict code quality standards:
   - **Services/Sorting/**: Dynamic sorting infrastructure with type-safe field mapping
   - **DataShapingService**: Field selection service for response customization
   - **LinkService**: HATEOS hypermedia link generation service for API navigation
-  - **TokenProvider**: JWT token generation service for authentication
+  - **TokenProvider**: JWT access and refresh token generation service for stateless authentication with secure random refresh tokens
   - **CustomMediaTypeNames**: Constants for custom media types including HATEOS content negotiation
 - **Settings/**: Configuration classes for application settings
-  - **JwtAuthOptions**: JWT authentication configuration including issuer, audience, signing key, and token expiration settings
+  - **JwtAuthOptions**: JWT authentication configuration including issuer, audience, signing key, access token expiration, and refresh token expiration settings
 - **Middleware/**: Custom middleware components
   - **ValidationExceptionHandler**: FluentValidation exception handling
   - **GlobalExceptionHandler**: General exception handling middleware
@@ -266,7 +268,13 @@ The project implements a fully functional ASP.NET Core Identity system for user 
   - **TokenProvider Service**: Generates signed JWT access tokens with user claims (subject, email)
   - **JWT Bearer Middleware**: Validates incoming tokens and populates HttpContext.User
   - **Configuration-Based Settings**: JWT issuer, audience, signing key, and expiration configurable via appsettings.json
-- **AuthController**: Fully functional authentication controller with user registration and login endpoints
+- **AuthController**: Fully functional authentication controller with user registration, login, and refresh token endpoints
+- **RefreshToken Infrastructure**: Complete refresh token management system with:
+  - **Database Storage**: RefreshTokens table in identity schema for secure token persistence
+  - **Token Rotation**: New refresh tokens issued on each refresh for enhanced security
+  - **Expiration Management**: Configurable refresh token lifetime with automatic validation
+  - **User Association**: Direct relationship between refresh tokens and Identity users
+  - **Secure Generation**: Cryptographically secure random token generation using RandomNumberGenerator
 
 ## Domain Model
 

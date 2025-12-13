@@ -58,6 +58,28 @@ User registration and authentication endpoints for account management:
   - Token expiration based on configured JWT settings
 - Returns `401 Unauthorized` if email not found or password is incorrect
 
+### Refresh Access Token
+- **POST** `/auth/refresh`
+- Exchanges a valid refresh token for new access and refresh tokens
+- Request Body: `RefreshTokenDto`
+- Response: Returns new JWT access tokens with `200 OK` status on successful refresh
+- **Request Properties:**
+  - `RefreshToken`: Required, valid refresh token obtained from login or register
+- **Authentication Process:**
+  - Validates the provided refresh token exists and hasn't expired
+  - Generates new JWT access and refresh tokens with updated expiration
+  - Updates the refresh token in the database with new value and expiration
+  - Returns structured token response for continued API access
+- **Security Features:**
+  - Refresh token rotation (new refresh token issued with each refresh)
+  - Expiration validation (configurable refresh token lifetime)
+  - Database-stored refresh tokens for revocation capabilities
+  - Automatic cleanup of expired tokens
+- **Token Lifetimes:**
+  - Access tokens: Configurable via `JwtAuthOptions.ExpirationInMinutes` (typically 15-60 minutes)
+  - Refresh tokens: Configurable via `JwtAuthOptions.RefreshTokenExpirationDays` (typically 7-30 days)
+- Returns `401 Unauthorized` if refresh token is invalid, expired, or not found
+
 ## Habits API
 The API provides full CRUD operations for habit management:
 
@@ -631,7 +653,7 @@ Content-Type: application/json
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmJlNTFmYy0xMDBjLTQ5NDAtYmY2NC1hYTk2ZTJmZmI1MTciLCJlbWFpbCI6Im5ld3VzZXJAZXhhbXBsZS5jb20iLCJpc3MiOiJkZXYtaGFiaXQtYXBpIiwiYXVkIjoiZGV2LWhhYml0LWNsaWVudCIsImV4cCI6MTczMzk5NjExNCwiaWF0IjoxNzMzOTkyNTE0fQ.K5xP2sY8JqN9LMwF3QRx7Tv4QnU8ZrW2Ht1Bc9VmXdE",
-  "refreshToken": ""
+  "refreshToken": "xYz9K3mP2qR4sT6uV8wX0yA1bC2dE3fG4hI5jK6lM7nO8pQ9rS0tU1vW2xY3zA4B"
 }
 ```
 
@@ -650,7 +672,7 @@ Content-Type: application/json
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmJlNTFmYy0xMDBjLTQ5NDAtYmY2NC1hYTk2ZTJmZmI1MTciLCJlbWFpbCI6Im5ld3VzZXJAZXhhbXBsZS5jb20iLCJpc3MiOiJkZXYtaGFiaXQtYXBpIiwiYXVkIjoiZGV2LWhhYml0LWNsaWVudCIsImV4cCI6MTczMzk5NjExNCwiaWF0IjoxNzMzOTkyNTE0fQ.K5xP2sY8JqN9LMwF3QRx7Tv4QnU8ZrW2Ht1Bc9VmXdE",
-  "refreshToken": ""
+  "refreshToken": "aB3cD4eF5gH6iJ7kL8mN9oP0qR1sT2uV3wX4yZ5A6B7C8D9E0F1G2H3I4J5K6L7M"
 }
 ```
 
@@ -662,6 +684,36 @@ Content-Type: application/json
 {
   "email": "nonexistent@example.com",
   "password": "WrongPassword"
+}
+```
+
+**Response**: `401 Unauthorized`
+
+### Refreshing Access Token
+```json
+POST /auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "aB3cD4eF5gH6iJ7kL8mN9oP0qR1sT2uV3wX4yZ5A6B7C8D9E0F1G2H3I4J5K6L7M"
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmJlNTFmYy0xMDBjLTQ5NDAtYmY2NC1hYTk2ZTJmZmI1MTciLCJlbWFpbCI6Im5ld3VzZXJAZXhhbXBsZS5jb20iLCJpc3MiOiJkZXYtaGFiaXQtYXBpIiwiYXVkIjoiZGV2LWhhYml0LWNsaWVudCIsImV4cCI6MTczMzk5ODcyNCwiaWF0IjoxNzMzOTk1MTI0fQ.N9mE8qP7rL2wF6QxY3zA4B5cD6eF7gH8iJ9kL0mN1oP2qR3sT4uV5wX6yZ7A8B9C",
+  "refreshToken": "pQ9rS0tU1vW2xY3zA4B5cD6eF7gH8iJ9kL0mN1oP2qR3sT4uV5wX6yZ7A8B9C0dE"
+}
+```
+
+### Refresh Token Invalid or Expired
+```json
+POST /auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "invalid-or-expired-token"
 }
 ```
 
