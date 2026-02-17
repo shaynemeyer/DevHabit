@@ -21,6 +21,7 @@ using DevHabit.Api.Settings;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace DevHabit.Api;
 
@@ -125,6 +126,9 @@ public static class DependencyInjection
 
         builder.Services.AddTransient<TokenProvider>();
 
+        builder.Services.AddMemoryCache();
+        builder.Services.AddScoped<UserContext>();
+
         return builder;
     }
 
@@ -155,6 +159,16 @@ public static class DependencyInjection
             });
 
         builder.Services.AddAuthorization();
+
+        return builder;
+    }
+
+    public static WebApplicationBuilder AddDataProtection(this WebApplicationBuilder builder)
+    {
+        builder.Services.AddDataProtection()
+            .PersistKeysToFileSystem(new DirectoryInfo("/home/app/.aspnet/DataProtection-Keys"))
+            .SetApplicationName("DevHabit.Api")
+            .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
 
         return builder;
     }

@@ -10,7 +10,8 @@ builder
     .AddDatabase()
     .AddObservability()
     .AddApplicationServices()
-    .AddAuthenticationServices();
+    .AddAuthenticationServices()
+    .AddDataProtection();
 
 WebApplication app = builder.Build();
 
