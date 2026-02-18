@@ -81,7 +81,7 @@ User registration and authentication endpoints for account management:
 - Returns `401 Unauthorized` if refresh token is invalid, expired, or not found
 
 ## Habits API
-The API provides full CRUD operations for habit management:
+The API provides full CRUD operations for habit management with user-specific resource protection. **All habit endpoints require JWT authentication.**
 
 ### Get All Habits
 - **GET** `/habits`
@@ -170,7 +170,7 @@ The API provides full CRUD operations for habit management:
 - **Note**: Cascade deletion automatically removes all HabitTag associations
 
 ## Tags API
-Complete CRUD operations for tag management:
+Complete CRUD operations for tag management with user-specific resource protection. **All tag endpoints require JWT authentication.**
 
 ### Get All Tags
 - **GET** `/tags`

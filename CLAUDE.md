@@ -53,13 +53,13 @@ The project enforces strict code quality standards:
 ### Current Structure
 - **Controllers/**: API controllers for resource management
   - **AuthController**: User registration and JWT-based authentication endpoints (register, login, refresh)
-  - **HabitsController**: Complete CRUD operations for habit management including tagging support
-  - **TagsController**: Complete CRUD operations for tag management
+  - **HabitsController**: Complete CRUD operations for habit management including tagging support (requires authentication, user-specific resource protection)
+  - **TagsController**: Complete CRUD operations for tag management (requires authentication, user-specific resource protection)
   - **HabitTagsController**: Association management between habits and tags
   - **UsersController**: User retrieval operations
 - **Entities/**: Domain entities including complex value objects
-  - **Habit**: Core domain entity with complex value objects (Frequency, Target, Milestone)
-  - **Tag**: Tag entity for categorizing habits (Id, Name, Description, timestamps)
+  - **Habit**: Core domain entity with complex value objects (Frequency, Target, Milestone) and user-specific resource protection (UserId)
+  - **Tag**: Tag entity for categorizing habits (Id, UserId, Name, Description, timestamps) with user-specific resource protection
   - **HabitTag**: Junction entity for many-to-many habit-tag relationships
   - **User**: User entity for managing user accounts (Id, Email, Name, IdentityId, timestamps)
   - **RefreshToken**: Identity-specific entity for managing refresh tokens (Id, UserId, Token, ExpiresAtUtc, User navigation)
@@ -107,13 +107,16 @@ The project enforces strict code quality standards:
   - **DataShapingService**: Field selection service for response customization
   - **LinkService**: HATEOS hypermedia link generation service for API navigation
   - **TokenProvider**: JWT access and refresh token generation service for stateless authentication with secure random refresh tokens
+  - **UserContext**: User authorization context service with caching for retrieving current user information from JWT claims
   - **CustomMediaTypeNames**: Constants for custom media types including HATEOS content negotiation
 - **Settings/**: Configuration classes for application settings
   - **JwtAuthOptions**: JWT authentication configuration including issuer, audience, signing key, access token expiration, and refresh token expiration settings
 - **Middleware/**: Custom middleware components
   - **ValidationExceptionHandler**: FluentValidation exception handling
   - **GlobalExceptionHandler**: General exception handling middleware
-- **Extensions/**: Extension methods including database setup
+- **Extensions/**: Extension methods including database setup and claims principal extensions
+  - **DatabaseExtensions**: Database configuration and setup utilities
+  - **ClaimsPrincipalExtensions**: Extension methods for extracting user identity information from JWT claims
 - **DependencyInjection.cs**: Organized service registration using extension methods
 - **Program.cs**: Clean application entry point using extension methods for configuration with authentication and authorization middleware properly configured
 
@@ -132,7 +135,7 @@ The project uses ASP.NET Core's built-in dependency injection container with a c
 - **AddErrorHandling()**: Sets up problem details framework and exception handlers for validation and global error handling
 - **AddDatabase()**: Configures Entity Framework Core with PostgreSQL, snake case naming conventions, and dual-schema organization (application and identity)
 - **AddObservability()**: Registers OpenTelemetry for distributed tracing, metrics collection, and observability with OTLP export
-- **AddApplicationServices()**: Registers application-specific services including FluentValidation, dynamic sorting, data shaping, and HATEOS link generation services
+- **AddApplicationServices()**: Registers application-specific services including FluentValidation, dynamic sorting, data shaping, HATEOS link generation, and user context services
 - **AddAuthenticationServices()**: Configures ASP.NET Core Identity with Entity Framework stores and JWT Bearer authentication for stateless API authentication
 
 This modular approach in `Program.cs` provides clear separation of concerns and makes the application startup configuration easy to understand and maintain.
@@ -276,11 +279,27 @@ The project implements a fully functional ASP.NET Core Identity system for user 
   - **User Association**: Direct relationship between refresh tokens and Identity users
   - **Secure Generation**: Cryptographically secure random token generation using RandomNumberGenerator
 
+### Authorization and Resource Protection
+The API implements comprehensive authorization to ensure users can only access their own data:
+- **Controller-Level Authorization**: `[Authorize]` attribute on HabitsController and TagsController requires valid JWT authentication
+- **User Context Service**: `UserContext` service retrieves current user information from JWT claims with performance caching
+  - **Claim Extraction**: Uses `ClaimsPrincipalExtensions.GetIdentityId()` to extract user identity from JWT tokens
+  - **User Resolution**: Maps Identity user ID to application User entity ID with 30-minute sliding cache
+  - **Database Optimization**: Cached lookups prevent repeated database queries for user resolution
+- **Resource-Level Protection**: All habit and tag operations filter by `UserId` to ensure data isolation
+  - **Habit Operations**: All CRUD operations include `&& h.UserId == userId` filter conditions
+  - **Tag Operations**: All CRUD operations include `&& t.UserId == userId` filter conditions
+  - **Automatic Filtering**: Database queries automatically scope results to the authenticated user
+  - **Data Integrity**: Prevents unauthorized access to other users' habits and tags at the database level
+- **Entity-Level Security**: Both Habit and Tag entities include required `UserId` property for ownership tracking
+- **Service Registration**: UserContext registered as scoped service for request-level user context management
+
 ## Domain Model
 
 ### Habit Entity
 The core domain entity that represents a habit with the following properties:
 - **Id**: Unique identifier using Version 7 GUIDs with "h_" prefix
+- **UserId**: Required user identifier for resource protection and data isolation
 - **Name**: Required habit name (max 100 characters)
 - **Description**: Optional description (max 500 characters)
 - **Type**: Enum defining habit type (Binary, Measurable)
@@ -304,7 +323,8 @@ The core domain entity that represents a habit with the following properties:
 ### Tag Entity
 Domain entity for categorizing and organizing habits:
 - **Id**: Unique identifier using Version 7 GUIDs with "t_" prefix
-- **Name**: Required tag name (max 50 characters, unique constraint)
+- **UserId**: Required user identifier for resource protection and data isolation
+- **Name**: Required tag name (max 50 characters, unique per user)
 - **Description**: Optional tag description (max 500 characters)
 - **CreatedAtUtc**: Timestamp of creation
 - **UpdatedAtUtc**: Last modification timestamp
